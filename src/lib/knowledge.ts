@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, isSupabaseConfigured } from "./supabase";
 import type {
   KnowledgeTimelineEntry,
   Todo,
@@ -21,6 +21,8 @@ export async function getTimeline(options?: {
   limit?: number;
   offset?: number;
 }) {
+  if (!isSupabaseConfigured || !supabase) return [];
+
   let query = supabase
     .from("v_knowledge_timeline")
     .select("*")
@@ -58,6 +60,8 @@ export async function getTimeline(options?: {
 
 /** 顧客一覧取得 */
 export async function getClients() {
+  if (!isSupabaseConfigured || !supabase) return [];
+
   const { data, error } = await supabase
     .from("clients")
     .select("*")
@@ -68,28 +72,36 @@ export async function getClients() {
 
 /** 顧客カルテ取得（顧客情報 + タイムライン + TODO + 決定事項） */
 export async function getClientProfile(clientName: string) {
-  const [client, aliases, timeline, todos, decisions] = await Promise.all([
-    supabase.from("clients").select("*").eq("name", clientName).single(),
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      client: null,
+      aliases: [] as ClientAlias[],
+      timeline: [] as KnowledgeTimelineEntry[],
+      activeTodos: [] as Todo[],
+      activeDecisions: [] as Decision[],
+    };
+  }
+
+  const clientRes = await supabase
+    .from("clients")
+    .select("*")
+    .eq("name", clientName)
+    .single();
+
+  const clientId = clientRes.data?.id ?? "";
+
+  const [aliases, timeline, todos, decisions] = await Promise.all([
     supabase
       .from("client_aliases")
       .select("*")
-      .eq(
-        "client_id",
-        (
-          await supabase
-            .from("clients")
-            .select("id")
-            .eq("name", clientName)
-            .single()
-        ).data?.id ?? ""
-      ),
+      .eq("client_id", clientId),
     getTimeline({ client_name: clientName }),
     getTodos({ client_name: clientName, status: "open" }),
     getDecisions({ client_name: clientName, status: "active" }),
   ]);
 
   return {
-    client: client.data as Client,
+    client: clientRes.data as Client,
     aliases: (aliases.data ?? []) as ClientAlias[],
     timeline,
     activeTodos: todos,
@@ -103,6 +115,8 @@ export async function getClientProfile(clientName: string) {
 
 /** TODO一覧取得 */
 export async function getTodos(filter?: TodoFilter) {
+  if (!isSupabaseConfigured || !supabase) return [];
+
   let query = supabase
     .from("todos")
     .select("*")
@@ -112,7 +126,6 @@ export async function getTodos(filter?: TodoFilter) {
   if (filter?.status) {
     query = query.eq("status", filter.status);
   } else {
-    // デフォルトは未完了のみ
     query = query.not("status", "in", '("done","cancelled")');
   }
   if (filter?.client_name) {
@@ -135,6 +148,9 @@ export async function updateTodoStatus(
   id: string,
   status: Todo["status"]
 ) {
+  if (!isSupabaseConfigured || !supabase)
+    throw new Error("Supabase not configured");
+
   const { data, error } = await supabase
     .from("todos")
     .update({ status })
@@ -153,6 +169,9 @@ export async function createTodo(
   > &
     Partial<Pick<Todo, "assignee" | "due_date" | "sort_order">>
 ) {
+  if (!isSupabaseConfigured || !supabase)
+    throw new Error("Supabase not configured");
+
   const { data, error } = await supabase
     .from("todos")
     .insert(todo)
@@ -168,6 +187,8 @@ export async function createTodo(
 
 /** 決定事項一覧取得 */
 export async function getDecisions(filter?: DecisionFilter) {
+  if (!isSupabaseConfigured || !supabase) return [];
+
   let query = supabase
     .from("decisions")
     .select("*")
@@ -196,6 +217,9 @@ export async function updateDecisionStatus(
   id: string,
   status: Decision["status"]
 ) {
+  if (!isSupabaseConfigured || !supabase)
+    throw new Error("Supabase not configured");
+
   const { data, error } = await supabase
     .from("decisions")
     .update({ status })
