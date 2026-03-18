@@ -42,6 +42,8 @@ export default function Home() {
       <form onSubmit={handleSearch} style={{ display: "flex", gap: 8 }}>
         <input
           type="text"
+          name="search"
+          autoComplete="off"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="キーワードで横断検索..."

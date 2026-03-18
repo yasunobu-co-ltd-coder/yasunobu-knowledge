@@ -63,6 +63,8 @@ export default function TimelinePage() {
         <form onSubmit={handleSearch} style={{ display: "flex", gap: 8 }}>
           <input
             type="text"
+            name="search"
+            autoComplete="off"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="検索..."
