@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import type { KnowledgeTimelineEntry } from "@/types/database";
+import EntryDetailModal from "@/components/EntryDetailModal";
 
 export default function Home() {
   const [entries, setEntries] = useState<KnowledgeTimelineEntry[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<KnowledgeTimelineEntry | null>(null);
 
   const fetchData = async (searchText?: string) => {
     setLoading(true);
@@ -136,11 +138,14 @@ export default function Home() {
             {entries.map((entry) => (
               <div
                 key={`${entry.source_type}-${entry.id}`}
+                onClick={() => setSelected(entry)}
                 style={{
                   background: "#fff",
                   border: "1px solid #e2e8f0",
                   borderRadius: 12,
                   padding: "14px 16px",
+                  cursor: "pointer",
+                  transition: "box-shadow 0.15s",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -207,6 +212,10 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {selected && (
+        <EntryDetailModal entry={selected} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }

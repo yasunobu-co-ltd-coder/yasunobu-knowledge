@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import type { KnowledgeTimelineEntry, SourceType } from "@/types/database";
+import EntryDetailModal from "@/components/EntryDetailModal";
 
 export default function TimelinePage() {
   const [entries, setEntries] = useState<KnowledgeTimelineEntry[]>([]);
   const [filter, setFilter] = useState<SourceType | "">("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<KnowledgeTimelineEntry | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -110,11 +112,14 @@ export default function TimelinePage() {
           {entries.map((entry) => (
             <div
               key={`${entry.source_type}-${entry.id}`}
+              onClick={() => setSelected(entry)}
               style={{
                 background: "#fff",
                 border: "1px solid #e2e8f0",
                 borderRadius: 12,
                 padding: "14px 16px",
+                cursor: "pointer",
+                transition: "box-shadow 0.15s",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -191,6 +196,9 @@ export default function TimelinePage() {
             </div>
           ))}
         </div>
+      )}
+      {selected && (
+        <EntryDetailModal entry={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   );
