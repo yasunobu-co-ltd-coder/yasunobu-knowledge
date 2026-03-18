@@ -2,13 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import type { ClientProfile } from "@/types/database";
+import type { ClientProfile, KnowledgeTimelineEntry } from "@/types/database";
+import EntryDetailModal from "@/components/EntryDetailModal";
+import ClientChat from "@/components/ClientChat";
+
+type Tab = "karte" | "chat";
 
 export default function ClientDetailPage() {
   const params = useParams();
   const clientName = decodeURIComponent(params.name as string);
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>("karte");
+  const [selected, setSelected] = useState<KnowledgeTimelineEntry | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -24,32 +30,49 @@ export default function ClientDetailPage() {
 
   if (loading)
     return (
-      <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
+      <p style={{ padding: "32px 0", textAlign: "center", fontSize: 13, color: "#94a3b8" }}>
+        読み込み中...
+      </p>
     );
   if (!profile)
     return (
-      <p className="py-8 text-center text-sm text-gray-400">
+      <p style={{ padding: "32px 0", textAlign: "center", fontSize: 13, color: "#94a3b8" }}>
         顧客が見つかりません
       </p>
     );
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* 顧客ヘッダー */}
-      <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-        <h1 className="text-2xl font-bold text-green-900">
+      <div
+        style={{
+          background: "#f0fdf4",
+          border: "1px solid #bbf7d0",
+          borderRadius: 12,
+          padding: "14px 16px",
+        }}
+      >
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: "#14532d", margin: 0 }}>
           {profile.client.name}
         </h1>
         {profile.client.notes && (
-          <p className="mt-1 text-sm text-green-700">{profile.client.notes}</p>
+          <p style={{ fontSize: 13, color: "#15803d", marginTop: 4 }}>
+            {profile.client.notes}
+          </p>
         )}
         {profile.aliases.length > 0 && (
-          <div className="mt-2 flex gap-1">
-            <span className="text-xs text-green-600">別名:</span>
+          <div style={{ marginTop: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: "#16a34a" }}>別名:</span>
             {profile.aliases.map((a) => (
               <span
                 key={a.id}
-                className="rounded bg-green-100 px-1.5 py-0.5 text-xs text-green-700"
+                style={{
+                  background: "#dcfce7",
+                  borderRadius: 4,
+                  padding: "1px 8px",
+                  fontSize: 11,
+                  color: "#15803d",
+                }}
               >
                 {a.alias}
               </span>
@@ -58,90 +81,178 @@ export default function ClientDetailPage() {
         )}
       </div>
 
-      {/* 未完了TODO */}
-      {profile.activeTodos.length > 0 && (
-        <div>
-          <h2 className="mb-2 text-lg font-semibold text-gray-900">
-            未完了TODO ({profile.activeTodos.length})
-          </h2>
-          <div className="space-y-2">
-            {profile.activeTodos.map((todo) => (
-              <div
-                key={todo.id}
-                className="flex items-start gap-2 rounded border border-gray-200 bg-white p-3"
-              >
-                <span
-                  className={`mt-0.5 rounded px-1.5 py-0.5 text-xs ${
-                    todo.status === "open"
-                      ? "bg-yellow-100 text-yellow-700"
-                      : "bg-blue-100 text-blue-700"
-                  }`}
-                >
-                  {todo.status}
-                </span>
-                <span className="text-sm text-gray-700">{todo.content}</span>
-                {todo.due_date && (
-                  <span className="ml-auto text-xs text-gray-400">
-                    期限: {todo.due_date}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 有効な決定事項 */}
-      {profile.activeDecisions.length > 0 && (
-        <div>
-          <h2 className="mb-2 text-lg font-semibold text-gray-900">
-            決定事項 ({profile.activeDecisions.length})
-          </h2>
-          <div className="space-y-2">
-            {profile.activeDecisions.map((d) => (
-              <div
-                key={d.id}
-                className="rounded border border-gray-200 bg-white p-3 text-sm text-gray-700"
-              >
-                {d.content}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* タイムライン */}
-      <div>
-        <h2 className="mb-2 text-lg font-semibold text-gray-900">
-          履歴 ({profile.timeline.length})
-        </h2>
-        <div className="space-y-3">
-          {profile.timeline.map((entry) => (
-            <div
-              key={`${entry.source_type}-${entry.id}`}
-              className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`rounded px-2 py-0.5 text-xs font-medium ${
-                    entry.source_type === "memo"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-emerald-100 text-emerald-700"
-                  }`}
-                >
-                  {entry.source_type === "memo" ? "メモ" : "議事録"}
-                </span>
-                <span className="text-xs text-gray-400">
-                  {new Date(entry.created_at).toLocaleDateString("ja-JP")}
-                </span>
-              </div>
-              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm text-gray-700">
-                {entry.body || entry.summary || ""}
-              </p>
-            </div>
-          ))}
-        </div>
+      {/* タブ切替 */}
+      <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #e2e8f0", paddingBottom: 0 }}>
+        {(
+          [
+            { key: "karte", label: "カルテ" },
+            { key: "chat", label: "AIチャット" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              background: "none",
+              border: "none",
+              borderBottom: tab === t.key ? "2px solid #15803d" : "2px solid transparent",
+              padding: "8px 16px",
+              fontSize: 14,
+              fontWeight: 600,
+              color: tab === t.key ? "#15803d" : "#94a3b8",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
+
+      {/* カルテタブ */}
+      {tab === "karte" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* 未完了TODO */}
+          {profile.activeTodos.length > 0 && (
+            <div>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", marginBottom: 8 }}>
+                未完了TODO ({profile.activeTodos.length})
+              </h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {profile.activeTodos.map((todo) => (
+                  <div
+                    key={todo.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      background: "#fff",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 8,
+                      padding: "10px 12px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        borderRadius: 4,
+                        padding: "2px 8px",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        flexShrink: 0,
+                        background:
+                          todo.status === "open" ? "#fefce8" : "#dbeafe",
+                        color:
+                          todo.status === "open" ? "#a16207" : "#1d4ed8",
+                      }}
+                    >
+                      {todo.status}
+                    </span>
+                    <span style={{ fontSize: 13, color: "#334155", flex: 1 }}>
+                      {todo.content}
+                    </span>
+                    {todo.due_date && (
+                      <span style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0 }}>
+                        期限: {todo.due_date}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 有効な決定事項 */}
+          {profile.activeDecisions.length > 0 && (
+            <div>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", marginBottom: 8 }}>
+                決定事項 ({profile.activeDecisions.length})
+              </h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {profile.activeDecisions.map((d) => (
+                  <div
+                    key={d.id}
+                    style={{
+                      background: "#fff",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 8,
+                      padding: "10px 12px",
+                      fontSize: 13,
+                      color: "#334155",
+                    }}
+                  >
+                    {d.content}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* タイムライン */}
+          <div>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", marginBottom: 8 }}>
+              履歴 ({profile.timeline.length})
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {profile.timeline.map((entry) => (
+                <div
+                  key={`${entry.source_type}-${entry.id}`}
+                  onClick={() => setSelected(entry)}
+                  style={{
+                    background: "#fff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span
+                      style={{
+                        borderRadius: 4,
+                        padding: "2px 8px",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        background:
+                          entry.source_type === "memo" ? "#dcfce7" : "#d1fae5",
+                        color:
+                          entry.source_type === "memo" ? "#15803d" : "#047857",
+                      }}
+                    >
+                      {entry.source_type === "memo" ? "メモ" : "議事録"}
+                    </span>
+                    <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                      {new Date(entry.created_at).toLocaleDateString("ja-JP")}
+                    </span>
+                  </div>
+                  <p
+                    style={{
+                      marginTop: 6,
+                      fontSize: 13,
+                      color: "#334155",
+                      lineHeight: 1.6,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {entry.body || entry.summary || ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* チャットタブ */}
+      {tab === "chat" && <ClientChat clientName={clientName} />}
+
+      {/* 詳細モーダル */}
+      {selected && (
+        <EntryDetailModal entry={selected} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }
