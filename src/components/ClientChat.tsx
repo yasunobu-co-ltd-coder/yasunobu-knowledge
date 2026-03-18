@@ -20,6 +20,7 @@ export default function ClientChat({ clientName }: { clientName: string }) {
   const [streamingText, setStreamingText] = useState("");
   const [showThreadList, setShowThreadList] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
 
   const apiBase = `/api/clients/${encodeURIComponent(clientName)}`;
   const threadsKey = `${apiBase}/threads`;
@@ -79,7 +80,8 @@ export default function ClientChat({ clientName }: { clientName: string }) {
 
   // メッセージ送信
   const sendMessage = async (text: string) => {
-    if (!text.trim() || streaming) return;
+    if (!text.trim() || streaming || sendingRef.current) return;
+    sendingRef.current = true;
 
     // スレッドがなければ自動作成
     let threadId: string = activeThread?.id ?? "";
@@ -195,6 +197,7 @@ export default function ClientChat({ clientName }: { clientName: string }) {
       setStreamingText("");
     } finally {
       setStreaming(false);
+      sendingRef.current = false;
     }
   };
 
