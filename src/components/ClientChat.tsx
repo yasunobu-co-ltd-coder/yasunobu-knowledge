@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import useSWR, { mutate as globalMutate } from "swr";
+import { fetcher } from "@/lib/swr";
 import type { ChatThread, ChatMessage } from "@/types/database";
 
 const QUICK_PROMPTS = [
@@ -11,7 +13,6 @@ const QUICK_PROMPTS = [
 ];
 
 export default function ClientChat({ clientName }: { clientName: string }) {
-  const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -21,15 +22,15 @@ export default function ClientChat({ clientName }: { clientName: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const apiBase = `/api/clients/${encodeURIComponent(clientName)}`;
+  const threadsKey = `${apiBase}/threads`;
 
-  // スレッド一覧取得
-  const fetchThreads = useCallback(async () => {
-    const res = await fetch(`${apiBase}/threads`);
-    if (res.ok) {
-      const data = await res.json();
-      setThreads(Array.isArray(data) ? data : []);
-    }
-  }, [apiBase]);
+  // SWRでスレッド一覧をキャッシュ
+  const { data: threadsData } = useSWR<ChatThread[]>(
+    threadsKey,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 10000 }
+  );
+  const threads = threadsData ?? [];
 
   // メッセージ一覧取得（スレッド指定）
   const fetchMessages = useCallback(
@@ -44,11 +45,6 @@ export default function ClientChat({ clientName }: { clientName: string }) {
     },
     [apiBase]
   );
-
-  // 初回: スレッド一覧を取得
-  useEffect(() => {
-    fetchThreads();
-  }, [fetchThreads]);
 
   // スクロール
   useEffect(() => {
@@ -67,7 +63,7 @@ export default function ClientChat({ clientName }: { clientName: string }) {
     });
     if (res.ok) {
       const thread = await res.json();
-      setThreads((prev) => [thread, ...prev]);
+      globalMutate(threadsKey);
       setActiveThread(thread);
       setMessages([]);
       setShowThreadList(false);
@@ -95,7 +91,7 @@ export default function ClientChat({ clientName }: { clientName: string }) {
       });
       if (!res.ok) return;
       const thread = await res.json();
-      setThreads((prev) => [thread, ...prev]);
+      globalMutate(threadsKey);
       setActiveThread(thread);
       threadId = thread.id;
     }
@@ -184,7 +180,7 @@ export default function ClientChat({ clientName }: { clientName: string }) {
       setStreamingText("");
 
       // スレッドタイトル更新を反映
-      await fetchThreads();
+      globalMutate(threadsKey);
     } catch (err) {
       setMessages((prev) => [
         ...prev,

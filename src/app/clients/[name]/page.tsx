@@ -1,55 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
+import useSWR from "swr";
+import { fetcher } from "@/lib/swr";
 import type { ClientProfile, KnowledgeTimelineEntry, ChangeLog } from "@/types/database";
 import EntryDetailModal from "@/components/EntryDetailModal";
 import ClientChat from "@/components/ClientChat";
+import { SkeletonList } from "@/components/Skeleton";
 
 type Tab = "karte" | "chat" | "logs";
 
 export default function ClientDetailPage() {
   const params = useParams();
   const clientName = decodeURIComponent(params.name as string);
-  const [profile, setProfile] = useState<ClientProfile | null>(null);
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("karte");
   const [selected, setSelected] = useState<KnowledgeTimelineEntry | null>(null);
-  const [changeLogs, setChangeLogs] = useState<ChangeLog[]>([]);
-  const [logsLoaded, setLogsLoaded] = useState(false);
 
   const apiBase = `/api/clients/${encodeURIComponent(clientName)}`;
 
-  useEffect(() => {
-    (async () => {
-      const res = await fetch(apiBase);
-      if (res.ok) {
-        setProfile(await res.json());
-      }
-      setLoading(false);
-    })();
-  }, [apiBase]);
+  const { data: profile, isLoading } = useSWR<ClientProfile>(
+    apiBase,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 10000 }
+  );
 
-  // 変更履歴タブを開いた時に遅延読み込み
-  useEffect(() => {
-    if (tab === "logs" && !logsLoaded) {
-      (async () => {
-        const res = await fetch(`${apiBase}/change-logs`);
-        if (res.ok) {
-          const data = await res.json();
-          setChangeLogs(Array.isArray(data) ? data : []);
-        }
-        setLogsLoaded(true);
-      })();
-    }
-  }, [tab, logsLoaded, apiBase]);
+  // 変更履歴は「logs」タブ選択時のみ取得
+  const { data: changeLogs } = useSWR<ChangeLog[]>(
+    tab === "logs" ? `${apiBase}/change-logs` : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
 
-  if (loading)
-    return (
-      <p style={{ padding: "32px 0", textAlign: "center", fontSize: 13, color: "#94a3b8" }}>
-        読み込み中...
-      </p>
-    );
+  if (isLoading)
+    return <SkeletonList count={3} lines={3} />;
   if (!profile)
     return (
       <p style={{ padding: "32px 0", textAlign: "center", fontSize: 13, color: "#94a3b8" }}>
@@ -276,10 +260,8 @@ export default function ClientDetailPage() {
       {/* 変更履歴タブ */}
       {tab === "logs" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {!logsLoaded ? (
-            <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
-              読み込み中...
-            </p>
+          {!changeLogs ? (
+            <SkeletonList count={3} lines={1} />
           ) : changeLogs.length === 0 ? (
             <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
               変更履歴はまだありません

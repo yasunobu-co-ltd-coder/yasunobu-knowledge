@@ -1,42 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/swr";
 import type { KnowledgeTimelineEntry } from "@/types/database";
 import EntryDetailModal from "@/components/EntryDetailModal";
+import { SkeletonList } from "@/components/Skeleton";
 
 export default function Home() {
-  const [entries, setEntries] = useState<KnowledgeTimelineEntry[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [searchKey, setSearchKey] = useState("");
   const [selected, setSelected] = useState<KnowledgeTimelineEntry | null>(null);
 
-  const fetchData = async (searchText?: string) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("limit", "20");
-      if (searchText) params.set("search", searchText);
-      const res = await fetch(`/api/timeline?${params}`);
-      const data = await res.json();
-      setEntries(Array.isArray(data) ? data : []);
-    } catch {
-      setEntries([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const params = new URLSearchParams({ limit: "20" });
+  if (searchKey) params.set("search", searchKey);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const { data: entries, isLoading } = useSWR<KnowledgeTimelineEntry[]>(
+    `/api/timeline?${params}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  );
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchData(search);
+    setSearchKey(search);
   };
 
   const kw = (entry: KnowledgeTimelineEntry) =>
     Array.isArray(entry.keywords) ? entry.keywords : [];
+
+  const list = entries ?? [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -77,13 +70,7 @@ export default function Home() {
       </form>
 
       {/* クイックリンク */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 10,
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {[
           { href: "/timeline", icon: "\u{1F4D1}", title: "タイムライン", sub: "memo + 議事録" },
           { href: "/clients", icon: "\u{1F465}", title: "顧客一覧", sub: "顧客カルテ" },
@@ -115,27 +102,18 @@ export default function Home() {
 
       {/* 最新エントリ */}
       <div>
-        <h2
-          style={{
-            fontSize: 15,
-            fontWeight: 700,
-            color: "#1e293b",
-            marginBottom: 10,
-          }}
-        >
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", marginBottom: 10 }}>
           最新のナレッジ
         </h2>
-        {loading ? (
-          <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
-            読み込み中...
-          </p>
-        ) : entries.length === 0 ? (
+        {isLoading ? (
+          <SkeletonList count={4} lines={2} />
+        ) : list.length === 0 ? (
           <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
             データがありません
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {entries.map((entry) => (
+            {list.map((entry) => (
               <div
                 key={`${entry.source_type}-${entry.id}`}
                 onClick={() => setSelected(entry)}
@@ -145,7 +123,6 @@ export default function Home() {
                   borderRadius: 12,
                   padding: "14px 16px",
                   cursor: "pointer",
-                  transition: "box-shadow 0.15s",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -165,6 +142,7 @@ export default function Home() {
                   {entry.client_name && (
                     <a
                       href={`/clients/${encodeURIComponent(entry.client_name)}`}
+                      onClick={(e) => e.stopPropagation()}
                       style={{ fontSize: 13, fontWeight: 600, color: "#15803d", textDecoration: "none" }}
                     >
                       {entry.client_name}

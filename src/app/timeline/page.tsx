@@ -1,40 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/swr";
 import type { KnowledgeTimelineEntry, SourceType } from "@/types/database";
 import EntryDetailModal from "@/components/EntryDetailModal";
+import { SkeletonList } from "@/components/Skeleton";
 
 export default function TimelinePage() {
-  const [entries, setEntries] = useState<KnowledgeTimelineEntry[]>([]);
   const [filter, setFilter] = useState<SourceType | "">("");
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [searchKey, setSearchKey] = useState("");
   const [selected, setSelected] = useState<KnowledgeTimelineEntry | null>(null);
 
-  const fetchData = async () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    params.set("limit", "50");
-    if (filter) params.set("source_type", filter);
-    if (search) params.set("search", search);
-    const res = await fetch(`/api/timeline?${params}`);
-    const data = await res.json();
-    setEntries(Array.isArray(data) ? data : []);
-    setLoading(false);
-  };
+  const params = new URLSearchParams({ limit: "50" });
+  if (filter) params.set("source_type", filter);
+  if (searchKey) params.set("search", searchKey);
 
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  const { data: entries, isLoading } = useSWR<KnowledgeTimelineEntry[]>(
+    `/api/timeline?${params}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  );
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchData();
+    setSearchKey(search);
   };
 
   const kw = (entry: KnowledgeTimelineEntry) =>
     Array.isArray(entry.keywords) ? entry.keywords : [];
+
+  const list = entries ?? [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -99,17 +96,15 @@ export default function TimelinePage() {
       </div>
 
       {/* 一覧 */}
-      {loading ? (
-        <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
-          読み込み中...
-        </p>
-      ) : entries.length === 0 ? (
+      {isLoading ? (
+        <SkeletonList count={5} lines={2} />
+      ) : list.length === 0 ? (
         <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
           データがありません
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {entries.map((entry) => (
+          {list.map((entry) => (
             <div
               key={`${entry.source_type}-${entry.id}`}
               onClick={() => setSelected(entry)}
@@ -119,7 +114,6 @@ export default function TimelinePage() {
                 borderRadius: 12,
                 padding: "14px 16px",
                 cursor: "pointer",
-                transition: "box-shadow 0.15s",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -138,6 +132,7 @@ export default function TimelinePage() {
                 {entry.client_name && (
                   <a
                     href={`/clients/${encodeURIComponent(entry.client_name)}`}
+                    onClick={(e) => e.stopPropagation()}
                     style={{ fontSize: 13, fontWeight: 600, color: "#15803d", textDecoration: "none" }}
                   >
                     {entry.client_name}
@@ -197,6 +192,7 @@ export default function TimelinePage() {
           ))}
         </div>
       )}
+
       {selected && (
         <EntryDetailModal entry={selected} onClose={() => setSelected(null)} />
       )}
