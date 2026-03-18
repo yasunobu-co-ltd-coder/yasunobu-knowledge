@@ -94,7 +94,7 @@ export async function buildClientContext(clientName: string): Promise<string> {
     for (const t of todos.data) {
       const date = new Date(t.created_at).toLocaleDateString("ja-JP");
       sections.push(
-        `- [${t.status}] ${t.content}${t.due_date ? ` (期限:${t.due_date})` : ""}${t.assignee ? ` 担当:${t.assignee}` : ""} (${date})`
+        `- [${t.status}] (ID:${t.id}) ${t.content}${t.due_date ? ` (期限:${t.due_date})` : ""}${t.assignee ? ` 担当:${t.assignee}` : ""} (${date})`
       );
     }
   }
@@ -104,7 +104,7 @@ export async function buildClientContext(clientName: string): Promise<string> {
     sections.push("\n## 決定事項一覧");
     for (const d of decisions.data) {
       const date = new Date(d.created_at).toLocaleDateString("ja-JP");
-      sections.push(`- [${d.status}] ${d.content} (${date})`);
+      sections.push(`- [${d.status}] (ID:${d.id}) ${d.content} (${date})`);
     }
   }
 

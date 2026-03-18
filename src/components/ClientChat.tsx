@@ -166,6 +166,23 @@ export default function ClientChat({ clientName }: { clientName: string }) {
               fullText += parsed.text;
               setStreamingText(fullText);
             }
+            if (parsed.actions) {
+              // ツール実行結果をシステムメッセージとして追加
+              for (const action of parsed.actions as string[]) {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: crypto.randomUUID(),
+                    thread_id: threadId,
+                    role: "assistant" as const,
+                    content: `[実行] ${action}`,
+                    created_at: new Date().toISOString(),
+                  },
+                ]);
+              }
+              setStreamingText("");
+              fullText = "";
+            }
           } catch { /* ignore */ }
         }
       }
@@ -377,6 +394,30 @@ export default function ClientChat({ clientName }: { clientName: string }) {
             {messages.map((msg, idx) => {
               const isMatch = matchIndices.includes(idx);
               const isCurrentMatch = matchIndices[matchCurrent] === idx;
+              const isAction = msg.content.startsWith("[実行] ");
+              if (isAction) {
+                return (
+                  <div
+                    key={msg.id}
+                    ref={(el) => { if (el) msgRefs.current.set(idx, el); }}
+                    style={{ display: "flex", justifyContent: "center" }}
+                  >
+                    <div
+                      style={{
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        borderRadius: 20,
+                        padding: "6px 16px",
+                        fontSize: 12,
+                        color: "#15803d",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {msg.content.slice(5)}
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <div
                   key={msg.id}
