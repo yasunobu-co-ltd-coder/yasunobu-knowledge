@@ -9,6 +9,12 @@ const STATUS_LABELS: Record<DecisionStatus, string> = {
   cancelled: "取消",
 };
 
+const STATUS_COLORS: Record<DecisionStatus, { bg: string; color: string }> = {
+  active: { bg: "#dcfce7", color: "#15803d" },
+  revised: { bg: "#fef9c3", color: "#a16207" },
+  cancelled: { bg: "#f1f5f9", color: "#64748b" },
+};
+
 export default function DecisionsPage() {
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [filter, setFilter] = useState<DecisionStatus | "">("");
@@ -29,20 +35,25 @@ export default function DecisionsPage() {
   }, [fetchDecisions]);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">決定事項一覧</h1>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1e293b" }}>決定事項一覧</h1>
 
       {/* フィルタ */}
-      <div className="flex gap-1">
+      <div style={{ display: "flex", gap: 6 }}>
         {(["", "active", "revised", "cancelled"] as const).map((v) => (
           <button
             key={v}
             onClick={() => setFilter(v)}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              filter === v
-                ? "bg-green-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+            style={{
+              border: "none",
+              borderRadius: 20,
+              padding: "6px 14px",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: filter === v ? "#15803d" : "#f1f5f9",
+              color: filter === v ? "#fff" : "#64748b",
+            }}
           >
             {v === "" ? "有効のみ" : STATUS_LABELS[v]}
           </button>
@@ -50,46 +61,56 @@ export default function DecisionsPage() {
       </div>
 
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
+        <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
+          読み込み中...
+        </p>
       ) : decisions.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">
+        <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
           決定事項がありません
         </p>
       ) : (
-        <div className="space-y-2">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {decisions.map((d) => (
             <div
               key={d.id}
-              className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+              style={{
+                background: "#fff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 12,
+                padding: "14px 16px",
+              }}
             >
-              <div className="flex items-center gap-2">
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                 <span
-                  className={`rounded px-1.5 py-0.5 text-xs ${
-                    d.status === "active"
-                      ? "bg-green-100 text-green-700"
-                      : d.status === "revised"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-gray-100 text-gray-500"
-                  }`}
+                  style={{
+                    borderRadius: 4,
+                    padding: "2px 8px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: STATUS_COLORS[d.status].bg,
+                    color: STATUS_COLORS[d.status].color,
+                  }}
                 >
                   {STATUS_LABELS[d.status]}
                 </span>
                 {d.client_name && (
                   <a
                     href={`/clients/${encodeURIComponent(d.client_name)}`}
-                    className="text-xs font-medium text-green-700 hover:underline"
+                    style={{ fontSize: 12, fontWeight: 600, color: "#15803d", textDecoration: "none" }}
                   >
                     {d.client_name}
                   </a>
                 )}
-                <span className="rounded bg-gray-50 px-1.5 py-0.5 text-xs text-gray-400">
+                <span style={{ fontSize: 10, color: "#94a3b8" }}>
                   {d.source_type === "memo" ? "メモ" : "議事録"}
                 </span>
-                <span className="text-xs text-gray-400">
+                <span style={{ fontSize: 11, color: "#94a3b8" }}>
                   {new Date(d.created_at).toLocaleDateString("ja-JP")}
                 </span>
               </div>
-              <p className="mt-2 text-sm text-gray-700">{d.content}</p>
+              <p style={{ marginTop: 8, fontSize: 13, color: "#334155", lineHeight: 1.5 }}>
+                {d.content}
+              </p>
             </div>
           ))}
         </div>

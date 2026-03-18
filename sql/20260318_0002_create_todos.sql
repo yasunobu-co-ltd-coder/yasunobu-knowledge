@@ -1,6 +1,6 @@
 -- File: 20260318_0002_create_todos.sql
 -- Purpose: TODO追跡テーブルを作成
---   - 既存 pocket-matip の todos(jsonb) を個別行に展開して管理
+--   - 既存 pocket-yasunobu の todos(jsonb) を個別行に展開して管理
 --   - source_type + source_id で既存テーブルを参照（FKなし = 既存に影響ゼロ）
 -- Created: 2026-03-18
 

@@ -31,38 +31,63 @@ export default function TimelinePage() {
     fetchData();
   };
 
+  const kw = (entry: KnowledgeTimelineEntry) =>
+    Array.isArray(entry.keywords) ? entry.keywords : [];
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">タイムライン</h1>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1e293b" }}>タイムライン</h1>
 
       {/* フィルタ + 検索 */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", gap: 6 }}>
           {(["", "memo", "minutes"] as const).map((v) => (
             <button
               key={v}
               onClick={() => setFilter(v)}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                filter === v
-                  ? "bg-green-600 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
+              style={{
+                border: "none",
+                borderRadius: 20,
+                padding: "6px 14px",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                background: filter === v ? "#15803d" : "#f1f5f9",
+                color: filter === v ? "#fff" : "#64748b",
+              }}
             >
               {v === "" ? "すべて" : v === "memo" ? "メモ" : "議事録"}
             </button>
           ))}
         </div>
-        <form onSubmit={handleSearch} className="flex flex-1 gap-2">
+        <form onSubmit={handleSearch} style={{ display: "flex", gap: 8 }}>
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="検索..."
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+            style={{
+              flex: 1,
+              border: "1px solid #d1d5db",
+              borderRadius: 10,
+              padding: "8px 12px",
+              fontSize: 13,
+              outline: "none",
+              background: "#fff",
+            }}
           />
           <button
             type="submit"
-            className="rounded-lg bg-green-600 px-4 py-1.5 text-sm text-white hover:bg-green-700"
+            style={{
+              background: "#15803d",
+              color: "#fff",
+              border: "none",
+              borderRadius: 10,
+              padding: "8px 16px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
           >
             検索
           </button>
@@ -71,56 +96,92 @@ export default function TimelinePage() {
 
       {/* 一覧 */}
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
+        <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
+          読み込み中...
+        </p>
       ) : entries.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">
+        <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
           データがありません
         </p>
       ) : (
-        <div className="space-y-3">
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {entries.map((entry) => (
             <div
               key={`${entry.source_type}-${entry.id}`}
-              className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+              style={{
+                background: "#fff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 12,
+                padding: "14px 16px",
+              }}
             >
-              <div className="flex items-center gap-2 text-sm">
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                 <span
-                  className={`rounded px-2 py-0.5 text-xs font-medium ${
-                    entry.source_type === "memo"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-emerald-100 text-emerald-700"
-                  }`}
+                  style={{
+                    borderRadius: 4,
+                    padding: "2px 8px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: entry.source_type === "memo" ? "#dcfce7" : "#d1fae5",
+                    color: entry.source_type === "memo" ? "#15803d" : "#047857",
+                  }}
                 >
                   {entry.source_type === "memo" ? "メモ" : "議事録"}
                 </span>
                 {entry.client_name && (
                   <a
                     href={`/clients/${encodeURIComponent(entry.client_name)}`}
-                    className="font-medium text-green-700 hover:underline"
+                    style={{ fontSize: 13, fontWeight: 600, color: "#15803d", textDecoration: "none" }}
                   >
                     {entry.client_name}
                   </a>
                 )}
-                <span className="text-xs text-gray-400">
+                <span style={{ fontSize: 11, color: "#94a3b8" }}>
                   {new Date(entry.created_at).toLocaleDateString("ja-JP")}
                 </span>
                 {entry.importance && (
-                  <span className="rounded bg-yellow-50 px-1.5 py-0.5 text-xs text-yellow-700">
+                  <span
+                    style={{
+                      borderRadius: 4,
+                      padding: "2px 8px",
+                      fontSize: 10,
+                      background: "#fefce8",
+                      color: "#a16207",
+                    }}
+                  >
                     重要度: {entry.importance}
                   </span>
                 )}
               </div>
-              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm text-gray-700">
+              <p
+                style={{
+                  marginTop: 8,
+                  fontSize: 13,
+                  color: "#334155",
+                  lineHeight: 1.6,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 4,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
                 {entry.body || entry.summary || ""}
               </p>
-              {entry.keywords && entry.keywords.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {entry.keywords.map((kw, i) => (
+              {kw(entry).length > 0 && (
+                <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {kw(entry).map((k, i) => (
                     <span
                       key={i}
-                      className="rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-600"
+                      style={{
+                        borderRadius: 20,
+                        background: "#f0fdf4",
+                        padding: "2px 10px",
+                        fontSize: 11,
+                        color: "#16a34a",
+                      }}
                     >
-                      {kw}
+                      {k}
                     </span>
                   ))}
                 </div>

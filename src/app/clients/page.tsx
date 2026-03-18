@@ -17,32 +17,51 @@ export default function ClientsPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">顧客一覧</h1>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1e293b" }}>顧客一覧</h1>
 
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
+        <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
+          読み込み中...
+        </p>
       ) : clients.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">
-          顧客データがありません。初期データ投入SQLを実行してください。
+        <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
+          顧客データがありません
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {clients.map((c) => (
             <a
               key={c.id}
               href={`/clients/${encodeURIComponent(c.name)}`}
-              className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm hover:border-green-400 hover:shadow"
+              style={{
+                textDecoration: "none",
+                background: "#fff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 12,
+                padding: "14px 16px",
+                display: "block",
+              }}
             >
-              <div className="text-base font-medium text-gray-900">
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#1e293b" }}>
                 {c.name}
               </div>
               {c.notes && (
-                <p className="mt-1 line-clamp-2 text-xs text-gray-500">
+                <p
+                  style={{
+                    marginTop: 4,
+                    fontSize: 12,
+                    color: "#64748b",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}
+                >
                   {c.notes}
                 </p>
               )}
-              <div className="mt-2 text-xs text-gray-400">
+              <div style={{ marginTop: 6, fontSize: 11, color: "#94a3b8" }}>
                 登録: {new Date(c.created_at).toLocaleDateString("ja-JP")}
               </div>
             </a>

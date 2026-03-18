@@ -2,7 +2,7 @@
 // 既存テーブルの型定義（参照用・変更しない）
 // ===================================================
 
-/** matip-memo テーブル */
+/** yasunobu-memo テーブル */
 export type MemoRecord = {
   id: string;
   created_at: string;
@@ -16,10 +16,9 @@ export type MemoRecord = {
   assignment_type: "任せる" | "自分で";
   assignee: string;
   status: "open" | "未着手" | "対応中" | "done";
-  image_url?: string;
 };
 
-/** pocket-matip テーブル */
+/** pocket-yasunobu テーブル */
 export type MinutesRecord = {
   id: string | number;
   created_at: string;
@@ -110,7 +109,6 @@ export type KnowledgeTimelineEntry = {
   assignment_type: string | null;
   assignee: string | null;
   user_id: string | null;
-  image_url: string | null;
   decisions_json: string[] | null;
   todos_json: string[] | null;
   keywords: string[] | null;

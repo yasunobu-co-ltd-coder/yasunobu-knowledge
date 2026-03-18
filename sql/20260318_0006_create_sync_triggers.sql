@@ -20,18 +20,18 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- =============================================================================
--- 2. matip-memo への INSERT トリガー
+-- 2. yasunobu-memo への INSERT トリガー
 -- =============================================================================
 CREATE TRIGGER trg_memo_sync_client
-  AFTER INSERT ON "matip-memo"
+  AFTER INSERT ON "yasunobu-memo"
   FOR EACH ROW
   EXECUTE FUNCTION sync_client_name();
 
 -- =============================================================================
--- 3. pocket-matip への INSERT トリガー
+-- 3. pocket-yasunobu への INSERT トリガー
 -- =============================================================================
 CREATE TRIGGER trg_pocket_sync_client
-  AFTER INSERT ON "pocket-matip"
+  AFTER INSERT ON "pocket-yasunobu"
   FOR EACH ROW
   EXECUTE FUNCTION sync_client_name();
 
@@ -39,13 +39,13 @@ CREATE TRIGGER trg_pocket_sync_client
 -- 4. UPDATE 時にも client_name が変わったら追加
 -- =============================================================================
 CREATE TRIGGER trg_memo_sync_client_update
-  AFTER UPDATE OF client_name ON "matip-memo"
+  AFTER UPDATE OF client_name ON "yasunobu-memo"
   FOR EACH ROW
   WHEN (NEW.client_name IS DISTINCT FROM OLD.client_name)
   EXECUTE FUNCTION sync_client_name();
 
 CREATE TRIGGER trg_pocket_sync_client_update
-  AFTER UPDATE OF client_name ON "pocket-matip"
+  AFTER UPDATE OF client_name ON "pocket-yasunobu"
   FOR EACH ROW
   WHEN (NEW.client_name IS DISTINCT FROM OLD.client_name)
   EXECUTE FUNCTION sync_client_name();

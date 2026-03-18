@@ -33,132 +33,169 @@ export default function Home() {
     fetchData(search);
   };
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">ダッシュボード</h1>
-        <p className="text-sm text-gray-500">
-          memo / pocket を横断してナレッジを検索
-        </p>
-      </div>
+  const kw = (entry: KnowledgeTimelineEntry) =>
+    Array.isArray(entry.keywords) ? entry.keywords : [];
 
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* 検索 */}
-      <form onSubmit={handleSearch} className="flex gap-2">
+      <form onSubmit={handleSearch} style={{ display: "flex", gap: 8 }}>
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="キーワードで横断検索..."
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+          style={{
+            flex: 1,
+            border: "1px solid #d1d5db",
+            borderRadius: 10,
+            padding: "10px 14px",
+            fontSize: 14,
+            outline: "none",
+            background: "#fff",
+          }}
         />
         <button
           type="submit"
-          className="rounded-lg bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-700"
+          style={{
+            background: "#15803d",
+            color: "#fff",
+            border: "none",
+            borderRadius: 10,
+            padding: "10px 18px",
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
         >
           検索
         </button>
       </form>
 
       {/* クイックリンク */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <a
-          href="/timeline"
-          className="rounded-lg border border-green-200 bg-white p-4 shadow-sm hover:border-green-400 hover:shadow"
-        >
-          <div className="text-2xl">&#128209;</div>
-          <div className="mt-1 text-sm font-medium text-gray-900">
-            タイムライン
-          </div>
-          <div className="text-xs text-gray-500">memo + 議事録を時系列表示</div>
-        </a>
-        <a
-          href="/clients"
-          className="rounded-lg border border-green-200 bg-white p-4 shadow-sm hover:border-green-400 hover:shadow"
-        >
-          <div className="text-2xl">&#128101;</div>
-          <div className="mt-1 text-sm font-medium text-gray-900">
-            顧客一覧
-          </div>
-          <div className="text-xs text-gray-500">顧客カルテ・履歴</div>
-        </a>
-        <a
-          href="/todos"
-          className="rounded-lg border border-green-200 bg-white p-4 shadow-sm hover:border-green-400 hover:shadow"
-        >
-          <div className="text-2xl">&#9745;</div>
-          <div className="mt-1 text-sm font-medium text-gray-900">TODO</div>
-          <div className="text-xs text-gray-500">未完了タスクの追跡</div>
-        </a>
-        <a
-          href="/decisions"
-          className="rounded-lg border border-green-200 bg-white p-4 shadow-sm hover:border-green-400 hover:shadow"
-        >
-          <div className="text-2xl">&#128221;</div>
-          <div className="mt-1 text-sm font-medium text-gray-900">
-            決定事項
-          </div>
-          <div className="text-xs text-gray-500">決定事項の追跡</div>
-        </a>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
+        }}
+      >
+        {[
+          { href: "/timeline", icon: "\u{1F4D1}", title: "タイムライン", sub: "memo + 議事録" },
+          { href: "/clients", icon: "\u{1F465}", title: "顧客一覧", sub: "顧客カルテ" },
+          { href: "/todos", icon: "\u2611", title: "TODO", sub: "未完了タスク" },
+          { href: "/decisions", icon: "\u{1F4DD}", title: "決定事項", sub: "決定事項追跡" },
+        ].map((item) => (
+          <a
+            key={item.href}
+            href={item.href}
+            style={{
+              textDecoration: "none",
+              background: "#fff",
+              border: "1px solid #e2e8f0",
+              borderRadius: 12,
+              padding: "14px 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            <span style={{ fontSize: 22 }}>{item.icon}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>
+              {item.title}
+            </span>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>{item.sub}</span>
+          </a>
+        ))}
       </div>
 
       {/* 最新エントリ */}
       <div>
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">
+        <h2
+          style={{
+            fontSize: 15,
+            fontWeight: 700,
+            color: "#1e293b",
+            marginBottom: 10,
+          }}
+        >
           最新のナレッジ
         </h2>
         {loading ? (
-          <div className="py-8 text-center text-sm text-gray-400">
+          <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
             読み込み中...
-          </div>
+          </p>
         ) : entries.length === 0 ? (
-          <div className="py-8 text-center text-sm text-gray-400">
-            データがありません。Supabase の接続設定を確認してください。
-          </div>
+          <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
+            データがありません
+          </p>
         ) : (
-          <div className="space-y-3">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {entries.map((entry) => (
               <div
                 key={`${entry.source_type}-${entry.id}`}
-                className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+                style={{
+                  background: "#fff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                }}
               >
-                <div className="flex items-center gap-2">
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <span
-                    className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                      entry.source_type === "memo"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-emerald-100 text-emerald-700"
-                    }`}
+                    style={{
+                      display: "inline-block",
+                      borderRadius: 4,
+                      padding: "2px 8px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: entry.source_type === "memo" ? "#dcfce7" : "#d1fae5",
+                      color: entry.source_type === "memo" ? "#15803d" : "#047857",
+                    }}
                   >
                     {entry.source_type === "memo" ? "メモ" : "議事録"}
                   </span>
                   {entry.client_name && (
                     <a
                       href={`/clients/${encodeURIComponent(entry.client_name)}`}
-                      className="text-sm font-medium text-green-700 hover:underline"
+                      style={{ fontSize: 13, fontWeight: 600, color: "#15803d", textDecoration: "none" }}
                     >
                       {entry.client_name}
                     </a>
                   )}
-                  <span className="text-xs text-gray-400">
+                  <span style={{ fontSize: 11, color: "#94a3b8" }}>
                     {new Date(entry.created_at).toLocaleDateString("ja-JP")}
                   </span>
-                  {entry.status && (
-                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
-                      {entry.status}
-                    </span>
-                  )}
                 </div>
-                <p className="mt-2 line-clamp-3 text-sm text-gray-700">
+                <p
+                  style={{
+                    marginTop: 8,
+                    fontSize: 13,
+                    color: "#334155",
+                    lineHeight: 1.6,
+                    display: "-webkit-box",
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
                   {entry.body || entry.summary || "(内容なし)"}
                 </p>
-                {entry.keywords && entry.keywords.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {entry.keywords.map((kw, i) => (
+                {kw(entry).length > 0 && (
+                  <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {kw(entry).map((k, i) => (
                       <span
                         key={i}
-                        className="rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-600"
+                        style={{
+                          borderRadius: 20,
+                          background: "#f0fdf4",
+                          padding: "2px 10px",
+                          fontSize: 11,
+                          color: "#16a34a",
+                        }}
                       >
-                        {kw}
+                        {k}
                       </span>
                     ))}
                   </div>

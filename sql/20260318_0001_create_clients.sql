@@ -1,6 +1,6 @@
 -- File: 20260318_0001_create_clients.sql
 -- Purpose: 顧客マスタテーブルを作成
---   - 既存の matip-memo / pocket-matip の client_name を正規化する基盤
+--   - 既存の yasunobu-memo / pocket-yasunobu の client_name を正規化する基盤
 --   - 既存テーブルには一切変更を加えない
 -- Created: 2026-03-18
 

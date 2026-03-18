@@ -10,6 +10,13 @@ const STATUS_LABELS: Record<TodoStatus, string> = {
   cancelled: "取消",
 };
 
+const STATUS_COLORS: Record<TodoStatus, { bg: string; color: string }> = {
+  open: { bg: "#fef9c3", color: "#a16207" },
+  in_progress: { bg: "#dbeafe", color: "#1d4ed8" },
+  done: { bg: "#dcfce7", color: "#15803d" },
+  cancelled: { bg: "#f1f5f9", color: "#64748b" },
+};
+
 export default function TodosPage() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [filter, setFilter] = useState<TodoStatus | "">("");
@@ -39,47 +46,69 @@ export default function TodosPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">TODO一覧</h1>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1e293b" }}>TODO一覧</h1>
 
       {/* フィルタ */}
-      <div className="flex gap-1">
-        {(["", "open", "in_progress", "done", "cancelled"] as const).map(
-          (v) => (
-            <button
-              key={v}
-              onClick={() => setFilter(v)}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                filter === v
-                  ? "bg-green-600 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {v === "" ? "未完了" : STATUS_LABELS[v]}
-            </button>
-          )
-        )}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {(["", "open", "in_progress", "done", "cancelled"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setFilter(v)}
+            style={{
+              border: "none",
+              borderRadius: 20,
+              padding: "6px 14px",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: filter === v ? "#15803d" : "#f1f5f9",
+              color: filter === v ? "#fff" : "#64748b",
+            }}
+          >
+            {v === "" ? "未完了" : STATUS_LABELS[v]}
+          </button>
+        ))}
       </div>
 
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-400">読み込み中...</p>
+        <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
+          読み込み中...
+        </p>
       ) : todos.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-400">
+        <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
           TODOがありません
         </p>
       ) : (
-        <div className="space-y-2">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {todos.map((todo) => (
             <div
               key={todo.id}
-              className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+              style={{
+                background: "#fff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 12,
+                padding: "14px 16px",
+                display: "flex",
+                gap: 12,
+                alignItems: "flex-start",
+              }}
             >
-              {/* ステータス変更ボタン */}
-              <div className="flex flex-col gap-1">
+              {/* アクションボタン */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
                 {todo.status !== "done" && (
                   <button
                     onClick={() => updateStatus(todo.id, "done")}
-                    className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700 hover:bg-green-200"
+                    style={{
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "4px 10px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      background: "#dcfce7",
+                      color: "#15803d",
+                    }}
                   >
                     完了
                   </button>
@@ -87,43 +116,53 @@ export default function TodosPage() {
                 {todo.status === "open" && (
                   <button
                     onClick={() => updateStatus(todo.id, "in_progress")}
-                    className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700 hover:bg-blue-200"
+                    style={{
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "4px 10px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      background: "#dbeafe",
+                      color: "#1d4ed8",
+                    }}
                   >
                     着手
                   </button>
                 )}
               </div>
 
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <span
-                    className={`rounded px-1.5 py-0.5 text-xs ${
-                      todo.status === "open"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : todo.status === "in_progress"
-                          ? "bg-blue-100 text-blue-700"
-                          : todo.status === "done"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-500"
-                    }`}
+                    style={{
+                      borderRadius: 4,
+                      padding: "2px 8px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: STATUS_COLORS[todo.status].bg,
+                      color: STATUS_COLORS[todo.status].color,
+                    }}
                   >
                     {STATUS_LABELS[todo.status]}
                   </span>
                   {todo.client_name && (
                     <a
                       href={`/clients/${encodeURIComponent(todo.client_name)}`}
-                      className="text-xs font-medium text-green-700 hover:underline"
+                      style={{ fontSize: 12, fontWeight: 600, color: "#15803d", textDecoration: "none" }}
                     >
                       {todo.client_name}
                     </a>
                   )}
-                  <span className="rounded bg-gray-50 px-1.5 py-0.5 text-xs text-gray-400">
+                  <span style={{ fontSize: 10, color: "#94a3b8" }}>
                     {todo.source_type === "memo" ? "メモ" : "議事録"}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-gray-700">{todo.content}</p>
+                <p style={{ marginTop: 6, fontSize: 13, color: "#334155", lineHeight: 1.5 }}>
+                  {todo.content}
+                </p>
                 {todo.due_date && (
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p style={{ marginTop: 4, fontSize: 11, color: "#94a3b8" }}>
                     期限: {todo.due_date}
                   </p>
                 )}

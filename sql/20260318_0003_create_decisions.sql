@@ -1,6 +1,6 @@
 -- File: 20260318_0003_create_decisions.sql
 -- Purpose: 決定事項追跡テーブルを作成
---   - 既存 pocket-matip の decisions(jsonb) を個別行に展開して管理
+--   - 既存 pocket-yasunobu の decisions(jsonb) を個別行に展開して管理
 --   - revised_by で改訂チェーンを追跡可能
 -- Created: 2026-03-18
 
