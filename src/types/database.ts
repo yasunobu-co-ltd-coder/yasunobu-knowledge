@@ -143,3 +143,44 @@ export type DecisionFilter = {
   client_name?: string;
   source_type?: SourceType;
 };
+
+// ===================================================
+// チャット履歴
+// ===================================================
+
+/** chat_threads テーブル */
+export type ChatThread = {
+  id: string;
+  client_name: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+};
+
+/** chat_messages テーブル */
+export type ChatMessage = {
+  id: string;
+  thread_id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+};
+
+// ===================================================
+// 変更ログ
+// ===================================================
+
+/** change_logs テーブル */
+export type ChangeLog = {
+  id: string;
+  client_name: string | null;
+  source_type: string;
+  source_id: string;
+  change_type: string;
+  before_value: string | null;
+  after_value: string | null;
+  note: string | null;
+  thread_id: string | null;
+  created_by: string | null;
+  created_at: string;
+};

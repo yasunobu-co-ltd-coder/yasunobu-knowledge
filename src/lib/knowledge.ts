@@ -7,6 +7,7 @@ import type {
   DecisionFilter,
   Client,
   ClientAlias,
+  ChangeLog,
 } from "@/types/database";
 
 // ===================================================
@@ -143,13 +144,21 @@ export async function getTodos(filter?: TodoFilter) {
   return data as Todo[];
 }
 
-/** TODO ステータス更新 */
+/** TODO ステータス更新（変更ログ付き） */
 export async function updateTodoStatus(
   id: string,
-  status: Todo["status"]
+  status: Todo["status"],
+  opts?: { note?: string; thread_id?: string; created_by?: string }
 ) {
   if (!isSupabaseConfigured || !supabase)
     throw new Error("Supabase not configured");
+
+  // 変更前を取得
+  const { data: before } = await supabase
+    .from("todos")
+    .select("status, client_name")
+    .eq("id", id)
+    .single();
 
   const { data, error } = await supabase
     .from("todos")
@@ -158,6 +167,22 @@ export async function updateTodoStatus(
     .select()
     .single();
   if (error) throw error;
+
+  // 変更ログ記録
+  if (before && before.status !== status) {
+    await recordChangeLog({
+      client_name: before.client_name,
+      source_type: "todo",
+      source_id: id,
+      change_type: "status_update",
+      before_value: before.status,
+      after_value: status,
+      note: opts?.note,
+      thread_id: opts?.thread_id,
+      created_by: opts?.created_by,
+    });
+  }
+
   return data as Todo;
 }
 
@@ -212,13 +237,21 @@ export async function getDecisions(filter?: DecisionFilter) {
   return data as Decision[];
 }
 
-/** 決定事項のステータス更新 */
+/** 決定事項のステータス更新（変更ログ付き） */
 export async function updateDecisionStatus(
   id: string,
-  status: Decision["status"]
+  status: Decision["status"],
+  opts?: { note?: string; thread_id?: string; created_by?: string }
 ) {
   if (!isSupabaseConfigured || !supabase)
     throw new Error("Supabase not configured");
+
+  // 変更前を取得
+  const { data: before } = await supabase
+    .from("decisions")
+    .select("status, client_name")
+    .eq("id", id)
+    .single();
 
   const { data, error } = await supabase
     .from("decisions")
@@ -227,5 +260,56 @@ export async function updateDecisionStatus(
     .select()
     .single();
   if (error) throw error;
+
+  // 変更ログ記録
+  if (before && before.status !== status) {
+    await recordChangeLog({
+      client_name: before.client_name,
+      source_type: "decision",
+      source_id: id,
+      change_type: "status_update",
+      before_value: before.status,
+      after_value: status,
+      note: opts?.note,
+      thread_id: opts?.thread_id,
+      created_by: opts?.created_by,
+    });
+  }
+
   return data as Decision;
+}
+
+// ===================================================
+// 変更ログ
+// ===================================================
+
+/** 変更ログを記録 */
+export async function recordChangeLog(log: {
+  client_name?: string | null;
+  source_type: string;
+  source_id: string;
+  change_type: string;
+  before_value?: string | null;
+  after_value?: string | null;
+  note?: string | null;
+  thread_id?: string | null;
+  created_by?: string | null;
+}) {
+  if (!isSupabaseConfigured || !supabase) return;
+  await supabase.from("change_logs").insert(log);
+}
+
+/** 顧客の変更ログ取得 */
+export async function getChangeLogs(clientName: string, limit = 30) {
+  if (!isSupabaseConfigured || !supabase) return [];
+
+  const { data, error } = await supabase
+    .from("change_logs")
+    .select("*")
+    .eq("client_name", clientName)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data as ChangeLog[];
 }

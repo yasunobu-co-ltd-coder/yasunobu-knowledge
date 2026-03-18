@@ -1,11 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-};
+import { useState, useRef, useEffect, useCallback } from "react";
+import type { ChatThread, ChatMessage } from "@/types/database";
 
 const QUICK_PROMPTS = [
   "この顧客の状況を要約して",
@@ -15,63 +11,138 @@ const QUICK_PROMPTS = [
 ];
 
 export default function ClientChat({ clientName }: { clientName: string }) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [showThreadList, setShowThreadList] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const apiBase = `/api/clients/${encodeURIComponent(clientName)}`;
+
+  // スレッド一覧取得
+  const fetchThreads = useCallback(async () => {
+    const res = await fetch(`${apiBase}/threads`);
+    if (res.ok) {
+      const data = await res.json();
+      setThreads(Array.isArray(data) ? data : []);
+    }
+  }, [apiBase]);
+
+  // メッセージ一覧取得（スレッド指定）
+  const fetchMessages = useCallback(
+    async (threadId: string) => {
+      const res = await fetch(
+        `${apiBase}/threads/${threadId}/messages`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(Array.isArray(data) ? data : []);
+      }
+    },
+    [apiBase]
+  );
+
+  // 初回: スレッド一覧を取得
+  useEffect(() => {
+    fetchThreads();
+  }, [fetchThreads]);
+
+  // スクロール
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages]);
+  }, [messages, streamingText]);
 
+  // 新規スレッド作成
+  const createThread = async () => {
+    const res = await fetch(`${apiBase}/threads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "新しいチャット" }),
+    });
+    if (res.ok) {
+      const thread = await res.json();
+      setThreads((prev) => [thread, ...prev]);
+      setActiveThread(thread);
+      setMessages([]);
+      setShowThreadList(false);
+    }
+  };
+
+  // スレッド選択
+  const selectThread = async (thread: ChatThread) => {
+    setActiveThread(thread);
+    setShowThreadList(false);
+    await fetchMessages(thread.id);
+  };
+
+  // メッセージ送信
   const sendMessage = async (text: string) => {
     if (!text.trim() || streaming) return;
 
-    const userMsg: Message = { role: "user", content: text.trim() };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    // スレッドがなければ自動作成
+    let threadId: string = activeThread?.id ?? "";
+    if (!threadId) {
+      const res = await fetch(`${apiBase}/threads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: text.trim().slice(0, 40) }),
+      });
+      if (!res.ok) return;
+      const thread = await res.json();
+      setThreads((prev) => [thread, ...prev]);
+      setActiveThread(thread);
+      threadId = thread.id;
+    }
+
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      thread_id: threadId,
+      role: "user",
+      content: text.trim(),
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setStreaming(true);
-
-    // アシスタントの空メッセージを追加
-    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+    setStreamingText("");
 
     try {
-      const res = await fetch(
-        `/api/clients/${encodeURIComponent(clientName)}/chat`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: text.trim(),
-            history: messages.slice(-20),
-          }),
-        }
-      );
+      const res = await fetch(`${apiBase}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text.trim(),
+          thread_id: threadId,
+        }),
+      });
 
       if (!res.ok) {
         const err = await res.json();
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            thread_id: threadId!,
             role: "assistant",
             content: `エラー: ${err.error || res.statusText}`,
-          };
-          return updated;
-        });
+            created_at: new Date().toISOString(),
+          },
+        ]);
         setStreaming(false);
         return;
       }
 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
-
       if (!reader) throw new Error("No reader");
 
+      let fullText = "";
       let buffer = "";
       while (true) {
         const { done, value } = await reader.read();
@@ -85,44 +156,47 @@ export default function ClientChat({ clientName }: { clientName: string }) {
           if (!line.startsWith("data: ")) continue;
           const payload = line.slice(6);
           if (payload === "[DONE]") break;
-
           try {
             const parsed = JSON.parse(payload);
             if (parsed.text) {
-              setMessages((prev) => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                updated[updated.length - 1] = {
-                  ...last,
-                  content: last.content + parsed.text,
-                };
-                return updated;
-              });
-            }
-            if (parsed.error) {
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  role: "assistant",
-                  content: `エラー: ${parsed.error}`,
-                };
-                return updated;
-              });
+              fullText += parsed.text;
+              setStreamingText(fullText);
             }
           } catch {
-            // ignore parse error
+            // ignore
           }
         }
       }
+
+      // ストリーミング完了 → messagesに確定追加
+      if (fullText) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            thread_id: threadId!,
+            role: "assistant",
+            content: fullText,
+            created_at: new Date().toISOString(),
+          },
+        ]);
+      }
+      setStreamingText("");
+
+      // スレッドタイトル更新を反映
+      await fetchThreads();
     } catch (err) {
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          thread_id: threadId!,
           role: "assistant",
           content: `通信エラー: ${err instanceof Error ? err.message : String(err)}`,
-        };
-        return updated;
-      });
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      setStreamingText("");
     } finally {
       setStreaming(false);
     }
@@ -149,27 +223,140 @@ export default function ClientChat({ clientName }: { clientName: string }) {
         minHeight: 400,
       }}
     >
+      {/* スレッドバー */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          paddingBottom: 10,
+          borderBottom: "1px solid #e2e8f0",
+          marginBottom: 8,
+        }}
+      >
+        <button
+          onClick={() => setShowThreadList(!showThreadList)}
+          style={{
+            background: "#f1f5f9",
+            border: "none",
+            borderRadius: 8,
+            padding: "6px 12px",
+            fontSize: 13,
+            color: "#475569",
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          {showThreadList ? "×" : "履歴"}
+          {threads.length > 0 && !showThreadList && (
+            <span style={{ marginLeft: 4, fontSize: 11, color: "#94a3b8" }}>
+              ({threads.length})
+            </span>
+          )}
+        </button>
+        <span
+          style={{
+            flex: 1,
+            fontSize: 13,
+            color: "#64748b",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {activeThread?.title || "新しいチャット"}
+        </span>
+        <button
+          onClick={createThread}
+          style={{
+            background: "#15803d",
+            color: "#fff",
+            border: "none",
+            borderRadius: 8,
+            padding: "6px 12px",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          + 新規
+        </button>
+      </div>
+
+      {/* スレッド一覧（トグル） */}
+      {showThreadList && (
+        <div
+          style={{
+            maxHeight: 200,
+            overflow: "auto",
+            marginBottom: 8,
+            background: "#f8fafc",
+            borderRadius: 8,
+            border: "1px solid #e2e8f0",
+          }}
+        >
+          {threads.length === 0 ? (
+            <p style={{ padding: 12, fontSize: 13, color: "#94a3b8", textAlign: "center" }}>
+              チャット履歴なし
+            </p>
+          ) : (
+            threads.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => selectThread(t)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "10px 12px",
+                  border: "none",
+                  borderBottom: "1px solid #e2e8f0",
+                  background:
+                    activeThread?.id === t.id ? "#f0fdf4" : "transparent",
+                  cursor: "pointer",
+                  fontSize: 13,
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 600,
+                    color: "#1e293b",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {t.title}
+                </div>
+                <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                  {new Date(t.updated_at).toLocaleString("ja-JP", {
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+
       {/* チャット履歴 */}
       <div
         ref={scrollRef}
         style={{
           flex: 1,
           overflow: "auto",
-          padding: "12px 0",
+          padding: "8px 0",
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: 10,
         }}
       >
-        {messages.length === 0 ? (
-          <div style={{ padding: "24px 0", textAlign: "center" }}>
-            <p
-              style={{
-                fontSize: 14,
-                color: "#64748b",
-                marginBottom: 16,
-              }}
-            >
+        {messages.length === 0 && !streaming ? (
+          <div style={{ padding: "20px 0", textAlign: "center" }}>
+            <p style={{ fontSize: 14, color: "#64748b", marginBottom: 16 }}>
               {clientName} について質問してみましょう
             </p>
             <div
@@ -201,36 +388,71 @@ export default function ClientChat({ clientName }: { clientName: string }) {
             </div>
           </div>
         ) : (
-          messages.map((msg, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                justifyContent:
-                  msg.role === "user" ? "flex-end" : "flex-start",
-              }}
-            >
+          <>
+            {messages.map((msg) => (
               <div
+                key={msg.id}
                 style={{
-                  maxWidth: "85%",
-                  padding: "10px 14px",
-                  borderRadius:
-                    msg.role === "user"
-                      ? "16px 16px 4px 16px"
-                      : "16px 16px 16px 4px",
-                  background:
-                    msg.role === "user" ? "#15803d" : "#f1f5f9",
-                  color: msg.role === "user" ? "#fff" : "#1e293b",
-                  fontSize: 14,
-                  lineHeight: 1.7,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
+                  display: "flex",
+                  justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
                 }}
               >
-                {msg.content || (streaming && i === messages.length - 1 ? "..." : "")}
+                <div
+                  style={{
+                    maxWidth: "85%",
+                    padding: "10px 14px",
+                    borderRadius:
+                      msg.role === "user"
+                        ? "16px 16px 4px 16px"
+                        : "16px 16px 16px 4px",
+                    background: msg.role === "user" ? "#15803d" : "#f1f5f9",
+                    color: msg.role === "user" ? "#fff" : "#1e293b",
+                    fontSize: 14,
+                    lineHeight: 1.7,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {msg.content}
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+            {streaming && streamingText && (
+              <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                <div
+                  style={{
+                    maxWidth: "85%",
+                    padding: "10px 14px",
+                    borderRadius: "16px 16px 16px 4px",
+                    background: "#f1f5f9",
+                    color: "#1e293b",
+                    fontSize: 14,
+                    lineHeight: 1.7,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {streamingText}
+                  <span style={{ opacity: 0.4 }}>|</span>
+                </div>
+              </div>
+            )}
+            {streaming && !streamingText && (
+              <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: "16px 16px 16px 4px",
+                    background: "#f1f5f9",
+                    color: "#94a3b8",
+                    fontSize: 14,
+                  }}
+                >
+                  考え中...
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -245,7 +467,6 @@ export default function ClientChat({ clientName }: { clientName: string }) {
         }}
       >
         <textarea
-          ref={inputRef}
           name="chat-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
