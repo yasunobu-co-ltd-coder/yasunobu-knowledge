@@ -21,6 +21,7 @@ export default function ClientChat({ clientName }: { clientName: string }) {
   const [showThreadList, setShowThreadList] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sendingRef = useRef(false);
+  const creatingThreadRef = useRef(false);
 
   const apiBase = `/api/clients/${encodeURIComponent(clientName)}`;
   const threadsKey = `${apiBase}/threads`;
@@ -57,17 +58,23 @@ export default function ClientChat({ clientName }: { clientName: string }) {
 
   // 新規スレッド作成
   const createThread = async () => {
-    const res = await fetch(`${apiBase}/threads`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "新しいチャット" }),
-    });
-    if (res.ok) {
-      const thread = await res.json();
-      globalMutate(threadsKey);
-      setActiveThread(thread);
-      setMessages([]);
-      setShowThreadList(false);
+    if (creatingThreadRef.current) return;
+    creatingThreadRef.current = true;
+    try {
+      const res = await fetch(`${apiBase}/threads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "新しいチャット" }),
+      });
+      if (res.ok) {
+        const thread = await res.json();
+        globalMutate(threadsKey);
+        setActiveThread(thread);
+        setMessages([]);
+        setShowThreadList(false);
+      }
+    } finally {
+      creatingThreadRef.current = false;
     }
   };
 

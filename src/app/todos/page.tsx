@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useRef } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/swr";
 import type { Todo, TodoStatus } from "@/types/database";
+import { SkeletonList } from "@/components/Skeleton";
 
 const STATUS_LABELS: Record<TodoStatus, string> = {
   open: "未着手",
@@ -18,31 +21,33 @@ const STATUS_COLORS: Record<TodoStatus, { bg: string; color: string }> = {
 };
 
 export default function TodosPage() {
-  const [todos, setTodos] = useState<Todo[]>([]);
   const [filter, setFilter] = useState<TodoStatus | "">("");
-  const [loading, setLoading] = useState(true);
+  const updatingRef = useRef<Set<string>>(new Set());
 
-  const fetchTodos = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (filter) params.set("status", filter);
-    const res = await fetch(`/api/todos?${params}`);
-    const data = await res.json();
-    setTodos(Array.isArray(data) ? data : []);
-    setLoading(false);
-  }, [filter]);
+  const params = new URLSearchParams();
+  if (filter) params.set("status", filter);
 
-  useEffect(() => {
-    fetchTodos();
-  }, [fetchTodos]);
+  const { data: todos, isLoading, mutate } = useSWR<Todo[]>(
+    `/api/todos?${params}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  );
+
+  const list = todos ?? [];
 
   const updateStatus = async (id: string, status: TodoStatus) => {
-    await fetch(`/api/todos/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    fetchTodos();
+    if (updatingRef.current.has(id)) return;
+    updatingRef.current.add(id);
+    try {
+      await fetch(`/api/todos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      mutate();
+    } finally {
+      updatingRef.current.delete(id);
+    }
   };
 
   return (
@@ -71,17 +76,15 @@ export default function TodosPage() {
         ))}
       </div>
 
-      {loading ? (
-        <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
-          読み込み中...
-        </p>
-      ) : todos.length === 0 ? (
+      {isLoading ? (
+        <SkeletonList count={4} lines={2} />
+      ) : list.length === 0 ? (
         <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
           TODOがありません
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {todos.map((todo) => (
+          {list.map((todo) => (
             <div
               key={todo.id}
               style={{
@@ -99,6 +102,7 @@ export default function TodosPage() {
                 {todo.status !== "done" && (
                   <button
                     onClick={() => updateStatus(todo.id, "done")}
+                    disabled={updatingRef.current.has(todo.id)}
                     style={{
                       border: "none",
                       borderRadius: 6,
@@ -116,6 +120,7 @@ export default function TodosPage() {
                 {todo.status === "open" && (
                   <button
                     onClick={() => updateStatus(todo.id, "in_progress")}
+                    disabled={updatingRef.current.has(todo.id)}
                     style={{
                       border: "none",
                       borderRadius: 6,
