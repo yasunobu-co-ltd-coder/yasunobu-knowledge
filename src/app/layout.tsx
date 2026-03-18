@@ -6,6 +6,17 @@ const APP_VERSION = "v0.1";
 export const metadata: Metadata = {
   title: "ナレッジDB - 安信工業",
   description: "memo / pocket 横断ナレッジ管理",
+  openGraph: {
+    title: "ナレッジDB - 安信工業",
+    description: "memo / pocket 横断ナレッジ管理",
+    siteName: "ナレッジDB",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "ナレッジDB - 安信工業",
+    description: "memo / pocket 横断ナレッジ管理",
+  },
 };
 
 export const viewport: Viewport = {
