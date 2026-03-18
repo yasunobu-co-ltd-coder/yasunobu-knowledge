@@ -78,6 +78,18 @@ export default function ClientChat({ clientName }: { clientName: string }) {
     }
   };
 
+  // スレッド削除
+  const deleteThread = async (threadId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("このチャット履歴を削除しますか？")) return;
+    await fetch(`${apiBase}/threads/${threadId}`, { method: "DELETE" });
+    globalMutate(threadsKey);
+    if (activeThread?.id === threadId) {
+      setActiveThread(null);
+      setMessages([]);
+    }
+  };
+
   // スレッド選択
   const selectThread = async (thread: ChatThread) => {
     setActiveThread(thread);
@@ -307,42 +319,65 @@ export default function ClientChat({ clientName }: { clientName: string }) {
             </p>
           ) : (
             threads.map((t) => (
-              <button
+              <div
                 key={t.id}
-                onClick={() => selectThread(t)}
                 style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "10px 12px",
-                  border: "none",
+                  display: "flex",
+                  alignItems: "center",
                   borderBottom: "1px solid #e2e8f0",
                   background:
                     activeThread?.id === t.id ? "#f0fdf4" : "transparent",
-                  cursor: "pointer",
-                  fontSize: 13,
                 }}
               >
-                <div
+                <button
+                  onClick={() => selectThread(t)}
                   style={{
-                    fontWeight: 600,
-                    color: "#1e293b",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    flex: 1,
+                    textAlign: "left",
+                    padding: "10px 12px",
+                    border: "none",
+                    background: "transparent",
+                    cursor: "pointer",
+                    fontSize: 13,
+                    minWidth: 0,
                   }}
                 >
-                  {t.title}
-                </div>
-                <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
-                  {new Date(t.updated_at).toLocaleString("ja-JP", {
-                    month: "2-digit",
-                    day: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              </button>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      color: "#1e293b",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {t.title}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                    {new Date(t.updated_at).toLocaleString("ja-JP", {
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </button>
+                <button
+                  onClick={(e) => deleteThread(t.id, e)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#94a3b8",
+                    cursor: "pointer",
+                    padding: "8px 10px",
+                    fontSize: 16,
+                    flexShrink: 0,
+                  }}
+                  title="削除"
+                >
+                  ×
+                </button>
+              </div>
             ))
           )}
         </div>
