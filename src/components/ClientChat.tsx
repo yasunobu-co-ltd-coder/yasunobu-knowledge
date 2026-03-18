@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import useSWR, { mutate as globalMutate } from "swr";
-import { fetcher } from "@/lib/swr";
-import type { ChatThread, ChatMessage } from "@/types/database";
+import type { ChatMessage } from "@/types/database";
 
 const QUICK_PROMPTS = [
   "この顧客の状況を要約して",
@@ -13,109 +11,103 @@ const QUICK_PROMPTS = [
 ];
 
 export default function ClientChat({ clientName }: { clientName: string }) {
-  const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
-  const [showThreadList, setShowThreadList] = useState(false);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
+
+  // チャット内検索
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [matchIndices, setMatchIndices] = useState<number[]>([]);
+  const [matchCurrent, setMatchCurrent] = useState(0);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const sendingRef = useRef(false);
-  const creatingThreadRef = useRef(false);
+  const msgRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const apiBase = `/api/clients/${encodeURIComponent(clientName)}`;
-  const threadsKey = `${apiBase}/threads`;
 
-  // SWRでスレッド一覧をキャッシュ
-  const { data: threadsData } = useSWR<ChatThread[]>(
-    threadsKey,
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 10000 }
-  );
-  const threads = threadsData ?? [];
+  // 初回: 既存スレッドを取得 or 作成
+  const initThread = useCallback(async () => {
+    const res = await fetch(`${apiBase}/threads`);
+    if (!res.ok) { setInitialized(true); return; }
+    const threads = await res.json();
 
-  // メッセージ一覧取得（スレッド指定）
-  const fetchMessages = useCallback(
-    async (threadId: string) => {
-      const res = await fetch(
-        `${apiBase}/threads/${threadId}/messages`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(Array.isArray(data) ? data : []);
-      }
-    },
-    [apiBase]
-  );
-
-  // スクロール
-  useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages, streamingText]);
-
-  // 新規スレッド作成
-  const createThread = async () => {
-    if (creatingThreadRef.current) return;
-    creatingThreadRef.current = true;
-    try {
-      const res = await fetch(`${apiBase}/threads`, {
+    let tid: string;
+    if (Array.isArray(threads) && threads.length > 0) {
+      // 最新のスレッドを使う
+      tid = threads[0].id;
+    } else {
+      // なければ作成
+      const createRes = await fetch(`${apiBase}/threads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "新しいチャット" }),
+        body: JSON.stringify({ title: clientName }),
       });
-      if (res.ok) {
-        const thread = await res.json();
-        globalMutate(threadsKey);
-        setActiveThread(thread);
-        setMessages([]);
-        setShowThreadList(false);
-      }
-    } finally {
-      creatingThreadRef.current = false;
+      if (!createRes.ok) { setInitialized(true); return; }
+      const newThread = await createRes.json();
+      tid = newThread.id;
     }
-  };
 
-  // スレッド削除
-  const deleteThread = async (threadId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm("このチャット履歴を削除しますか？")) return;
-    await fetch(`${apiBase}/threads/${threadId}`, { method: "DELETE" });
-    globalMutate(threadsKey);
-    if (activeThread?.id === threadId) {
-      setActiveThread(null);
-      setMessages([]);
+    setThreadId(tid);
+
+    // メッセージ読み込み
+    const msgRes = await fetch(`${apiBase}/threads/${tid}/messages`);
+    if (msgRes.ok) {
+      const data = await msgRes.json();
+      setMessages(Array.isArray(data) ? data : []);
     }
-  };
+    setInitialized(true);
+  }, [apiBase, clientName]);
 
-  // スレッド選択
-  const selectThread = async (thread: ChatThread) => {
-    setActiveThread(thread);
-    setShowThreadList(false);
-    await fetchMessages(thread.id);
+  useEffect(() => {
+    initThread();
+  }, [initThread]);
+
+  // 最下部へスクロール
+  useEffect(() => {
+    if (!searchOpen) {
+      scrollRef.current?.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [messages, streamingText, searchOpen]);
+
+  // 検索実行
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setMatchIndices([]);
+      setMatchCurrent(0);
+      return;
+    }
+    const q = searchQuery.toLowerCase();
+    const indices = messages
+      .map((m, i) => (m.content.toLowerCase().includes(q) ? i : -1))
+      .filter((i) => i >= 0);
+    setMatchIndices(indices);
+    setMatchCurrent(0);
+    // 最初のマッチにスクロール
+    if (indices.length > 0) {
+      msgRefs.current.get(indices[0])?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [searchQuery, messages]);
+
+  // 検索ナビゲーション
+  const goToMatch = (dir: 1 | -1) => {
+    if (matchIndices.length === 0) return;
+    const next = (matchCurrent + dir + matchIndices.length) % matchIndices.length;
+    setMatchCurrent(next);
+    msgRefs.current.get(matchIndices[next])?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
   // メッセージ送信
   const sendMessage = async (text: string) => {
-    if (!text.trim() || streaming || sendingRef.current) return;
+    if (!text.trim() || streaming || sendingRef.current || !threadId) return;
     sendingRef.current = true;
-
-    // スレッドがなければ自動作成
-    let threadId: string = activeThread?.id ?? "";
-    if (!threadId) {
-      const res = await fetch(`${apiBase}/threads`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: text.trim().slice(0, 40) }),
-      });
-      if (!res.ok) return;
-      const thread = await res.json();
-      globalMutate(threadsKey);
-      setActiveThread(thread);
-      threadId = thread.id;
-    }
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -133,10 +125,7 @@ export default function ClientChat({ clientName }: { clientName: string }) {
       const res = await fetch(`${apiBase}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text.trim(),
-          thread_id: threadId,
-        }),
+        body: JSON.stringify({ message: text.trim(), thread_id: threadId }),
       });
 
       if (!res.ok) {
@@ -145,7 +134,7 @@ export default function ClientChat({ clientName }: { clientName: string }) {
           ...prev,
           {
             id: crypto.randomUUID(),
-            thread_id: threadId!,
+            thread_id: threadId,
             role: "assistant",
             content: `エラー: ${err.error || res.statusText}`,
             created_at: new Date().toISOString(),
@@ -164,11 +153,9 @@ export default function ClientChat({ clientName }: { clientName: string }) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
-
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const payload = line.slice(6);
@@ -179,19 +166,16 @@ export default function ClientChat({ clientName }: { clientName: string }) {
               fullText += parsed.text;
               setStreamingText(fullText);
             }
-          } catch {
-            // ignore
-          }
+          } catch { /* ignore */ }
         }
       }
 
-      // ストリーミング完了 → messagesに確定追加
       if (fullText) {
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
-            thread_id: threadId!,
+            thread_id: threadId,
             role: "assistant",
             content: fullText,
             created_at: new Date().toISOString(),
@@ -199,15 +183,12 @@ export default function ClientChat({ clientName }: { clientName: string }) {
         ]);
       }
       setStreamingText("");
-
-      // スレッドタイトル更新を反映
-      globalMutate(threadsKey);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
-          thread_id: threadId!,
+          thread_id: threadId,
           role: "assistant",
           content: `通信エラー: ${err instanceof Error ? err.message : String(err)}`,
           created_at: new Date().toISOString(),
@@ -232,6 +213,31 @@ export default function ClientChat({ clientName }: { clientName: string }) {
     }
   };
 
+  // 検索ハイライト
+  const highlightText = (text: string) => {
+    if (!searchQuery.trim()) return text;
+    const q = searchQuery.toLowerCase();
+    const idx = text.toLowerCase().indexOf(q);
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark style={{ background: "#fef08a", borderRadius: 2, padding: "0 1px" }}>
+          {text.slice(idx, idx + searchQuery.length)}
+        </mark>
+        {text.slice(idx + searchQuery.length)}
+      </>
+    );
+  };
+
+  if (!initialized) {
+    return (
+      <div style={{ padding: "32px 0", textAlign: "center", fontSize: 13, color: "#94a3b8" }}>
+        チャットを準備中...
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -241,144 +247,82 @@ export default function ClientChat({ clientName }: { clientName: string }) {
         minHeight: 400,
       }}
     >
-      {/* スレッドバー */}
+      {/* ヘッダー: 検索バー */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
-          paddingBottom: 10,
+          paddingBottom: 8,
           borderBottom: "1px solid #e2e8f0",
-          marginBottom: 8,
+          marginBottom: 4,
         }}
       >
-        <button
-          onClick={() => setShowThreadList(!showThreadList)}
-          style={{
-            background: "#f1f5f9",
-            border: "none",
-            borderRadius: 8,
-            padding: "6px 12px",
-            fontSize: 13,
-            color: "#475569",
-            cursor: "pointer",
-            fontWeight: 600,
-          }}
-        >
-          {showThreadList ? "×" : "履歴"}
-          {threads.length > 0 && !showThreadList && (
-            <span style={{ marginLeft: 4, fontSize: 11, color: "#94a3b8" }}>
-              ({threads.length})
+        <span style={{ flex: 1, fontSize: 13, color: "#64748b", fontWeight: 600 }}>
+          {clientName} チャット
+          {messages.length > 0 && (
+            <span style={{ fontWeight: 400, marginLeft: 6, fontSize: 11, color: "#94a3b8" }}>
+              ({messages.length}件)
             </span>
           )}
-        </button>
-        <span
-          style={{
-            flex: 1,
-            fontSize: 13,
-            color: "#64748b",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {activeThread?.title || "新しいチャット"}
         </span>
         <button
-          onClick={createThread}
+          onClick={() => { setSearchOpen(!searchOpen); setSearchQuery(""); }}
           style={{
-            background: "#15803d",
-            color: "#fff",
+            background: searchOpen ? "#15803d" : "#f1f5f9",
+            color: searchOpen ? "#fff" : "#475569",
             border: "none",
             borderRadius: 8,
-            padding: "6px 12px",
+            padding: "5px 10px",
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
           }}
         >
-          + 新規
+          検索
         </button>
       </div>
 
-      {/* スレッド一覧（トグル） */}
-      {showThreadList && (
+      {/* 検索入力 */}
+      {searchOpen && (
         <div
           style={{
-            maxHeight: 200,
-            overflow: "auto",
-            marginBottom: 8,
-            background: "#f8fafc",
-            borderRadius: 8,
-            border: "1px solid #e2e8f0",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 0",
+            borderBottom: "1px solid #e2e8f0",
+            marginBottom: 4,
           }}
         >
-          {threads.length === 0 ? (
-            <p style={{ padding: 12, fontSize: 13, color: "#94a3b8", textAlign: "center" }}>
-              チャット履歴なし
-            </p>
-          ) : (
-            threads.map((t) => (
-              <div
-                key={t.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  borderBottom: "1px solid #e2e8f0",
-                  background:
-                    activeThread?.id === t.id ? "#f0fdf4" : "transparent",
-                }}
-              >
-                <button
-                  onClick={() => selectThread(t)}
-                  style={{
-                    flex: 1,
-                    textAlign: "left",
-                    padding: "10px 12px",
-                    border: "none",
-                    background: "transparent",
-                    cursor: "pointer",
-                    fontSize: 13,
-                    minWidth: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      color: "#1e293b",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {t.title}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
-                    {new Date(t.updated_at).toLocaleString("ja-JP", {
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </button>
-                <button
-                  onClick={(e) => deleteThread(t.id, e)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#94a3b8",
-                    cursor: "pointer",
-                    padding: "8px 10px",
-                    fontSize: 16,
-                    flexShrink: 0,
-                  }}
-                  title="削除"
-                >
-                  ×
-                </button>
-              </div>
-            ))
+          <input
+            type="text"
+            name="chat-search"
+            autoComplete="off"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="チャット内を検索..."
+            autoFocus
+            style={{
+              flex: 1,
+              border: "1px solid #d1d5db",
+              borderRadius: 8,
+              padding: "6px 10px",
+              fontSize: 13,
+              outline: "none",
+            }}
+          />
+          {matchIndices.length > 0 && (
+            <>
+              <span style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>
+                {matchCurrent + 1}/{matchIndices.length}
+              </span>
+              <button onClick={() => goToMatch(-1)} style={navBtnStyle}>▲</button>
+              <button onClick={() => goToMatch(1)} style={navBtnStyle}>▼</button>
+            </>
+          )}
+          {searchQuery && matchIndices.length === 0 && (
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>0件</span>
           )}
         </div>
       )}
@@ -430,34 +374,52 @@ export default function ClientChat({ clientName }: { clientName: string }) {
           </div>
         ) : (
           <>
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                style={{
-                  display: "flex",
-                  justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                }}
-              >
+            {messages.map((msg, idx) => {
+              const isMatch = matchIndices.includes(idx);
+              const isCurrentMatch = matchIndices[matchCurrent] === idx;
+              return (
                 <div
+                  key={msg.id}
+                  ref={(el) => { if (el) msgRefs.current.set(idx, el); }}
                   style={{
-                    maxWidth: "85%",
-                    padding: "10px 14px",
-                    borderRadius:
-                      msg.role === "user"
-                        ? "16px 16px 4px 16px"
-                        : "16px 16px 16px 4px",
-                    background: msg.role === "user" ? "#15803d" : "#f1f5f9",
-                    color: msg.role === "user" ? "#fff" : "#1e293b",
-                    fontSize: 14,
-                    lineHeight: 1.7,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
+                    display: "flex",
+                    justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
                   }}
                 >
-                  {msg.content}
+                  <div
+                    style={{
+                      maxWidth: "85%",
+                      padding: "10px 14px",
+                      borderRadius:
+                        msg.role === "user"
+                          ? "16px 16px 4px 16px"
+                          : "16px 16px 16px 4px",
+                      background: msg.role === "user" ? "#15803d" : "#f1f5f9",
+                      color: msg.role === "user" ? "#fff" : "#1e293b",
+                      fontSize: 14,
+                      lineHeight: 1.7,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      outline: isCurrentMatch
+                        ? "2px solid #f59e0b"
+                        : isMatch
+                          ? "1px solid #fbbf24"
+                          : "none",
+                    }}
+                  >
+                    {isMatch ? highlightText(msg.content) : msg.content}
+                    <div style={{ fontSize: 10, color: msg.role === "user" ? "rgba(255,255,255,0.5)" : "#94a3b8", marginTop: 4 }}>
+                      {new Date(msg.created_at).toLocaleString("ja-JP", {
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {streaming && streamingText && (
               <div style={{ display: "flex", justifyContent: "flex-start" }}>
                 <div
@@ -550,3 +512,13 @@ export default function ClientChat({ clientName }: { clientName: string }) {
     </div>
   );
 }
+
+const navBtnStyle: React.CSSProperties = {
+  background: "#f1f5f9",
+  border: "none",
+  borderRadius: 4,
+  padding: "2px 8px",
+  fontSize: 12,
+  cursor: "pointer",
+  color: "#475569",
+};
