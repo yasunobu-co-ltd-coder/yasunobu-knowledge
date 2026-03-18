@@ -8,43 +8,54 @@ const VALID_PIN = process.env.NEXT_PUBLIC_APP_PIN || "";
 const STORAGE_KEY = "yasunobu_knowledge_pin_verified";
 
 export default function PinGuard({ children }: { children: React.ReactNode }) {
-  const [verified, setVerified] = useState(false);
+  const [stage, setStage] = useState<"loading" | "pin" | "ready">("loading");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
-  const [verifiedAt, setVerifiedAt] = useState(0);
 
   useEffect(() => {
-    // PINが未設定ならスキップ
     if (!VALID_PIN) {
-      setVerified(true);
+      setStage("ready");
       return;
     }
     if (sessionStorage.getItem(STORAGE_KEY) === "true") {
-      setVerified(true);
+      setStage("ready");
+    } else {
+      setStage("pin");
     }
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pin === VALID_PIN) {
-      setVerifiedAt(Date.now());
-      setVerified(true);
       sessionStorage.setItem(STORAGE_KEY, "true");
       setError("");
+      // ゴーストクリック防止: 少し待ってから遷移
+      setTimeout(() => setStage("ready"), 300);
     } else {
       setError("PINコードが正しくありません");
     }
   };
 
-  // ゴーストクリック防止（800ms）
-  if (verified && Date.now() - verifiedAt < 800) {
-    return null;
+  // 初期ロード中（sessionStorage確認中）
+  if (stage === "loading") {
+    return (
+      <div
+        style={{
+          minHeight: "100dvh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#f8fafc",
+        }}
+      />
+    );
   }
 
-  if (verified) {
+  if (stage === "ready") {
     return <>{children}</>;
   }
 
+  // PIN入力画面
   return (
     <div
       style={{
@@ -81,7 +92,6 @@ export default function PinGuard({ children }: { children: React.ReactNode }) {
             alignItems: "center",
             justifyContent: "center",
             margin: "0 auto 16px",
-            fontSize: 36,
           }}
         >
           <img
