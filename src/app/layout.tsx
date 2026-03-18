@@ -6,6 +6,12 @@ const APP_VERSION = "v0.1";
 export const metadata: Metadata = {
   title: "ナレッジDB - 安信工業",
   description: "memo / pocket 横断ナレッジ管理",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "yasunobu-knowledge",
+  },
   openGraph: {
     title: "ナレッジDB - 安信工業",
     description: "memo / pocket 横断ナレッジ管理",
@@ -24,6 +30,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#15803d",
 };
 
 export default function RootLayout({
