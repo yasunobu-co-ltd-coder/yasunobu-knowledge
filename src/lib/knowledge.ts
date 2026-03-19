@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
+import { normalizeClientName } from "./normalize-client";
 import type {
   KnowledgeTimelineEntry,
   Todo,
@@ -59,7 +60,7 @@ export async function getTimeline(options?: {
 // 顧客（clients）
 // ===================================================
 
-/** 顧客一覧取得 */
+/** 顧客一覧取得（名前を正規化して統合） */
 export async function getClients() {
   if (!isSupabaseConfigured || !supabase) return [];
 
@@ -68,7 +69,43 @@ export async function getClients() {
     .select("*")
     .order("name");
   if (error) throw error;
-  return data as Client[];
+
+  const raw = data as Client[];
+  // 正規化名でグルーピング
+  const groups = new Map<string, Client[]>();
+  for (const c of raw) {
+    const key = normalizeClientName(c.name);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(c);
+  }
+
+  // グループごとに代表を返す（最古のcreated_at、notesは結合）
+  const merged: Client[] = [];
+  for (const [normName, members] of groups) {
+    members.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const representative = { ...members[0] };
+    representative.name = normName;
+    // notesが複数あれば統合
+    const allNotes = members
+      .map((m) => m.notes)
+      .filter(Boolean)
+      .join("\n");
+    if (allNotes) representative.notes = allNotes;
+    merged.push(representative);
+  }
+
+  merged.sort((a, b) => a.name.localeCompare(b.name, "ja"));
+  return merged;
+}
+
+/** 正規化名に一致するDB上の全名前バリアントを取得 */
+async function getClientVariants(normalizedName: string): Promise<string[]> {
+  if (!isSupabaseConfigured || !supabase) return [normalizedName];
+  const { data } = await supabase.from("clients").select("name");
+  if (!data) return [normalizedName];
+  return data
+    .map((c: { name: string }) => c.name)
+    .filter((n: string) => normalizeClientName(n) === normalizedName);
 }
 
 /** 顧客カルテ取得（顧客情報 + タイムライン + TODO + 決定事項） */
@@ -83,30 +120,38 @@ export async function getClientProfile(clientName: string) {
     };
   }
 
+  // 正規化名に一致する全バリアントを取得
+  const variants = await getClientVariants(clientName);
+
+  // 代表クライアント（最初にヒットしたもの）
   const clientRes = await supabase
     .from("clients")
     .select("*")
-    .eq("name", clientName)
+    .in("name", variants)
+    .order("created_at")
+    .limit(1)
     .single();
 
   const clientId = clientRes.data?.id ?? "";
 
-  const [aliases, timeline, todos, decisions] = await Promise.all([
-    supabase
-      .from("client_aliases")
-      .select("*")
-      .eq("client_id", clientId),
-    getTimeline({ client_name: clientName }),
-    getTodos({ client_name: clientName, status: "open" }),
-    getDecisions({ client_name: clientName, status: "active" }),
+  // 全バリアント名でタイムライン・TODO・決定事項を取得
+  const [aliases, timelineResults, todoResults, decisionResults] = await Promise.all([
+    supabase.from("client_aliases").select("*").eq("client_id", clientId),
+    Promise.all(variants.map((v) => getTimeline({ client_name: v }))),
+    Promise.all(variants.map((v) => getTodos({ client_name: v, status: "open" }))),
+    Promise.all(variants.map((v) => getDecisions({ client_name: v, status: "active" }))),
   ]);
+
+  const timeline = timelineResults.flat().sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const activeTodos = todoResults.flat();
+  const activeDecisions = decisionResults.flat();
 
   return {
     client: clientRes.data as Client,
     aliases: (aliases.data ?? []) as ClientAlias[],
     timeline,
-    activeTodos: todos,
-    activeDecisions: decisions,
+    activeTodos,
+    activeDecisions,
   };
 }
 

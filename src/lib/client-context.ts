@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
+import { normalizeClientName } from "./normalize-client";
 
 /**
  * 顧客に紐づく全データをテキストコンテキストとしてまとめる
@@ -9,35 +10,41 @@ export async function buildClientContext(clientName: string): Promise<string> {
     return "（データベース未接続）";
   }
 
-  // 並列で取得
-  const [memos, minutes, todos, decisions] = await Promise.all([
-    supabase
-      .from("v_knowledge_timeline")
-      .select("*")
-      .eq("client_name", clientName)
-      .eq("source_type", "memo")
-      .order("created_at", { ascending: false })
-      .limit(30),
-    supabase
-      .from("v_knowledge_timeline")
-      .select("*")
-      .eq("client_name", clientName)
-      .eq("source_type", "minutes")
-      .order("created_at", { ascending: false })
-      .limit(20),
-    supabase
-      .from("todos")
-      .select("*")
-      .eq("client_name", clientName)
-      .order("created_at", { ascending: false })
-      .limit(30),
-    supabase
-      .from("decisions")
-      .select("*")
-      .eq("client_name", clientName)
-      .order("created_at", { ascending: false })
-      .limit(20),
+  // 正規化名に一致する全バリアントを取得
+  const { data: allClients } = await supabase.from("clients").select("name");
+  const variants = (allClients ?? [])
+    .map((c: { name: string }) => c.name)
+    .filter((n: string) => normalizeClientName(n) === clientName);
+  if (variants.length === 0) variants.push(clientName);
+
+  // 全バリアントで並列取得
+  const [memoResults, minutesResults, todoResults, decisionResults] = await Promise.all([
+    Promise.all(variants.map((v) =>
+      supabase!.from("v_knowledge_timeline").select("*")
+        .eq("client_name", v).eq("source_type", "memo")
+        .order("created_at", { ascending: false }).limit(30)
+    )),
+    Promise.all(variants.map((v) =>
+      supabase!.from("v_knowledge_timeline").select("*")
+        .eq("client_name", v).eq("source_type", "minutes")
+        .order("created_at", { ascending: false }).limit(20)
+    )),
+    Promise.all(variants.map((v) =>
+      supabase!.from("todos").select("*")
+        .eq("client_name", v)
+        .order("created_at", { ascending: false }).limit(30)
+    )),
+    Promise.all(variants.map((v) =>
+      supabase!.from("decisions").select("*")
+        .eq("client_name", v)
+        .order("created_at", { ascending: false }).limit(20)
+    )),
   ]);
+
+  const memos = { data: memoResults.flatMap((r) => r.data ?? []) };
+  const minutes = { data: minutesResults.flatMap((r) => r.data ?? []) };
+  const todos = { data: todoResults.flatMap((r) => r.data ?? []) };
+  const decisions = { data: decisionResults.flatMap((r) => r.data ?? []) };
 
   const sections: string[] = [];
 
