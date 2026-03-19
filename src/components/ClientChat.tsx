@@ -127,7 +127,7 @@ export default function ClientChat({ clientName }: { clientName: string }) {
       const res = await fetch(`${apiBase}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text.trim(), thread_id: threadId, user_name: user?.name }),
+        body: JSON.stringify({ message: text.trim(), thread_id: threadId, user_name: user?.name, user_id: user?.id }),
       });
 
       if (!res.ok) {

@@ -145,7 +145,8 @@ async function executeTool(
   args: Record<string, unknown>,
   clientName: string,
   threadId: string,
-  userName?: string
+  userName?: string,
+  userId?: string
 ): Promise<{ success: boolean; message: string }> {
   try {
     switch (name) {
@@ -218,16 +219,17 @@ async function executeTool(
 
       case "create_memo": {
         if (!isSupabaseConfigured || !supabase) throw new Error("DB not configured");
-        const { error } = await supabase
-          .from("yasunobu-memo")
-          .insert({
-            client_name: clientName,
-            memo: args.body as string,
-            importance: (args.importance as string) || "中",
-            urgency: "低",
-            profit: "中",
-            status: "open",
-          });
+        const memoRow: Record<string, unknown> = {
+          client_name: clientName,
+          memo: args.body as string,
+          importance: (args.importance as string) || "中",
+          urgency: "低",
+          profit: "中",
+          status: "open",
+        };
+        if (userId) memoRow.created_by = userId;
+        if (userId) memoRow.assignee = userId;
+        const { error } = await supabase.from("yasunobu-memo").insert(memoRow);
         if (error) throw error;
         return { success: true, message: `メモ「${(args.body as string).slice(0, 30)}...」を記録しました` };
       }
@@ -236,17 +238,18 @@ async function executeTool(
         if (!isSupabaseConfigured || !supabase) throw new Error("DB not configured");
         const eventDate = args.date as string;
         const eventContent = args.content as string;
-        const { error } = await supabase
-          .from("yasunobu-memo")
-          .insert({
-            client_name: clientName,
-            memo: eventContent,
-            due_date: eventDate,
-            importance: (args.importance as string) || "中",
-            urgency: "中",
-            profit: "中",
-            status: "open",
-          });
+        const calRow: Record<string, unknown> = {
+          client_name: clientName,
+          memo: eventContent,
+          due_date: eventDate,
+          importance: (args.importance as string) || "中",
+          urgency: "中",
+          profit: "中",
+          status: "open",
+        };
+        if (userId) calRow.created_by = userId;
+        if (userId) calRow.assignee = userId;
+        const { error } = await supabase.from("yasunobu-memo").insert(calRow);
         if (error) throw error;
         return { success: true, message: `カレンダーに「${eventContent}」を${eventDate}に追加しました` };
       }
@@ -319,10 +322,11 @@ export async function POST(
     const { name } = await params;
     const clientName = decodeURIComponent(name);
     const body = await req.json();
-    const { message, thread_id, user_name } = body as {
+    const { message, thread_id, user_name, user_id } = body as {
       message: string;
       thread_id: string;
       user_name?: string;
+      user_id?: string;
     };
 
     if (!message || !thread_id) {
@@ -440,7 +444,7 @@ export async function POST(
                 parsedArgs = {};
               }
 
-              const result = await executeTool(tc.name, parsedArgs, clientName, thread_id, user_name);
+              const result = await executeTool(tc.name, parsedArgs, clientName, thread_id, user_name, user_id);
               actionResults.push(result.message);
 
               currentMessages.push({
