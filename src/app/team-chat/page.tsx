@@ -7,8 +7,19 @@ import { useUser, AppUser } from "@/lib/user-context";
 import { supabase } from "@/lib/supabase";
 
 type Channel = { id: string; name: string; client_name: string | null; created_at: string };
-type TeamMessage = { id: string; channel_id: string; user_id: string; user_name: string; content: string; created_at: string };
+type TeamMessage = {
+  id: string; channel_id: string; user_id: string; user_name: string; content: string; created_at: string;
+  reply_to_id: string | null; attachment_type: string | null; attachment_id: string | null;
+};
 type ReadStatus = { user_id: string; last_read_at: string };
+type AttachmentItem = { id: string; type: "memo" | "minutes" | "todo" | "decision"; label: string; client_name: string | null };
+
+const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  memo: { label: "メモ", color: "#1d4ed8", bg: "#dbeafe" },
+  minutes: { label: "議事録", color: "#7c3aed", bg: "#f3e8ff" },
+  todo: { label: "TODO", color: "#a16207", bg: "#fefce8" },
+  decision: { label: "決定", color: "#15803d", bg: "#dcfce7" },
+};
 
 export default function TeamChatPage() {
   const { user } = useUser();
@@ -29,6 +40,17 @@ export default function TeamChatPage() {
   const [showMembers, setShowMembers] = useState(false);
   const [channelMembers, setChannelMembers] = useState<string[]>([]);
 
+  // リプライ
+  const [replyTo, setReplyTo] = useState<TeamMessage | null>(null);
+
+  // 添付
+  const [showAttachPanel, setShowAttachPanel] = useState(false);
+  const [attachSearch, setAttachSearch] = useState("");
+  const [attachResults, setAttachResults] = useState<AttachmentItem[]>([]);
+  const [selectedAttachment, setSelectedAttachment] = useState<AttachmentItem | null>(null);
+  const [attachLoading, setAttachLoading] = useState(false);
+  const attachSearchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
   // ユーザー一覧
   const { data: allUsers } = useSWR<AppUser[]>("/api/users", fetcher, { dedupingInterval: 60000 });
   const { data: channels, mutate: mutateChannels } = useSWR<Channel[]>("/api/team-chat/channels", fetcher, { dedupingInterval: 30000 });
@@ -47,7 +69,6 @@ export default function TeamChatPage() {
           applicationServerKey: urlBase64ToUint8Array(vapidKey),
         });
       }
-      // サーバーに登録
       fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -115,7 +136,6 @@ export default function TeamChatPage() {
           const newMsg = payload.new as TeamMessage;
           setMessages((prev) => prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
           markAsRead(activeChannelId);
-          // 少し待って既読情報を更新
           setTimeout(() => loadReadStatuses(activeChannelId), 1000);
         }
       )
@@ -125,27 +145,55 @@ export default function TeamChatPage() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // 既読人数計算（自分のメッセージに対して）
+  // 既読人数計算
   const getReadCount = (msg: TeamMessage) => {
     if (msg.user_id !== user?.id) return null;
     const msgTime = new Date(msg.created_at).getTime();
     return readStatuses.filter((rs) => rs.user_id !== user?.id && new Date(rs.last_read_at).getTime() >= msgTime).length;
   };
 
+  // 添付検索（デバウンス）
+  const searchAttachments = useCallback((q: string) => {
+    clearTimeout(attachSearchTimer.current);
+    attachSearchTimer.current = setTimeout(async () => {
+      setAttachLoading(true);
+      try {
+        const res = await fetch(`/api/team-chat/attachments?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (Array.isArray(data)) setAttachResults(data);
+      } catch { /* ignore */ }
+      setAttachLoading(false);
+    }, 300);
+  }, []);
+
+  useEffect(() => {
+    if (showAttachPanel) searchAttachments(attachSearch);
+  }, [attachSearch, showAttachPanel, searchAttachments]);
+
   const sendMessage = async () => {
     if (!input.trim() || !user || !activeChannelId || sendingRef.current) return;
     sendingRef.current = true;
     setSending(true);
     try {
+      const body: Record<string, unknown> = {
+        channel_id: activeChannelId, user_id: user.id, user_name: user.name, content: input.trim(),
+      };
+      if (replyTo) body.reply_to_id = replyTo.id;
+      if (selectedAttachment) {
+        body.attachment_type = selectedAttachment.type;
+        body.attachment_id = selectedAttachment.id;
+      }
       const res = await fetch("/api/team-chat/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel_id: activeChannelId, user_id: user.id, user_name: user.name, content: input.trim() }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const newMsg = await res.json();
         setMessages((prev) => prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
         setInput("");
+        setReplyTo(null);
+        setSelectedAttachment(null);
       }
     } finally { setSending(false); sendingRef.current = false; }
   };
@@ -160,7 +208,6 @@ export default function TeamChatPage() {
       });
       if (!res.ok) { alert(`エラー: ${(await res.json()).error}`); return; }
       const ch = await res.json();
-      // メンバー追加（自分 + 選択したメンバー）
       const memberIds = [...selectedMembers];
       if (!memberIds.includes(user.id)) memberIds.push(user.id);
       await fetch(`/api/team-chat/channels/${ch.id}/members`, {
@@ -195,6 +242,12 @@ export default function TeamChatPage() {
     }
   };
 
+  // リプライ先のメッセージを探す
+  const getReplyTarget = (msg: TeamMessage) => {
+    if (!msg.reply_to_id) return null;
+    return messages.find((m) => m.id === msg.reply_to_id) || null;
+  };
+
   const activeChannel = channels?.find((c) => c.id === activeChannelId);
 
   return (
@@ -217,7 +270,7 @@ export default function TeamChatPage() {
         >+</button>
       </div>
 
-      {/* 新規チャンネル作成（参加者選択付き） */}
+      {/* 新規チャンネル作成 */}
       {showNewChannel && (
         <div style={{ padding: "8px 0", flexShrink: 0, display: "flex", flexDirection: "column", gap: 8 }}>
           <input name="channel-name" value={newChannelName} onChange={(e) => setNewChannelName(e.target.value)}
@@ -246,7 +299,7 @@ export default function TeamChatPage() {
         </div>
       )}
 
-      {/* チャンネルヘッダー + メンバー管理 */}
+      {/* チャンネルヘッダー */}
       {activeChannel && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0 8px", flexShrink: 0 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{activeChannel.name}</span>
@@ -283,18 +336,50 @@ export default function TeamChatPage() {
           const isMe = msg.user_id === user?.id;
           const time = new Date(msg.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
           const readCount = getReadCount(msg);
+          const replyTarget = getReplyTarget(msg);
+          const attType = msg.attachment_type ? TYPE_LABELS[msg.attachment_type] : null;
+
           return (
             <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
               {!isMe && (
                 <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600, marginBottom: 2, paddingLeft: 4 }}>{msg.user_name}</span>
               )}
-              <div style={{
-                maxWidth: "85%", padding: "8px 12px",
-                borderRadius: isMe ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-                background: isMe ? "#15803d" : "#f1f5f9",
-                color: isMe ? "#fff" : "#1e293b",
-                fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
-              }}>
+
+              {/* リプライ表示 */}
+              {replyTarget && (
+                <div style={{
+                  maxWidth: "80%", padding: "4px 10px", marginBottom: 2,
+                  borderLeft: "3px solid #94a3b8", borderRadius: 6,
+                  background: "#f8fafc", fontSize: 11, color: "#64748b",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  <span style={{ fontWeight: 600 }}>{replyTarget.user_name}</span>: {replyTarget.content.slice(0, 50)}
+                </div>
+              )}
+
+              {/* 添付カード */}
+              {attType && (
+                <div style={{
+                  maxWidth: "80%", padding: "6px 10px", marginBottom: 2, borderRadius: 8,
+                  background: attType.bg, border: `1px solid ${attType.color}20`,
+                  fontSize: 11, color: attType.color, fontWeight: 600,
+                }}>
+                  {attType.label}を参照
+                </div>
+              )}
+
+              {/* メッセージ本体 */}
+              <div
+                onClick={() => !isMe ? setReplyTo(msg) : undefined}
+                onContextMenu={(e) => { e.preventDefault(); setReplyTo(msg); }}
+                style={{
+                  maxWidth: "85%", padding: "8px 12px",
+                  borderRadius: isMe ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+                  background: isMe ? "#15803d" : "#f1f5f9",
+                  color: isMe ? "#fff" : "#1e293b",
+                  fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                  cursor: "pointer",
+                }}>
                 {msg.content}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
@@ -309,8 +394,90 @@ export default function TeamChatPage() {
         <div ref={bottomRef} />
       </div>
 
+      {/* リプライプレビュー */}
+      {replyTo && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", flexShrink: 0,
+          background: "#f0fdf4", borderRadius: "8px 8px 0 0", borderLeft: "3px solid #15803d",
+        }}>
+          <div style={{ flex: 1, fontSize: 12, color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontWeight: 600, color: "#15803d" }}>{replyTo.user_name}</span>に返信: {replyTo.content.slice(0, 40)}
+          </div>
+          <button onClick={() => setReplyTo(null)}
+            style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 16, cursor: "pointer", padding: "0 4px" }}>✕</button>
+        </div>
+      )}
+
+      {/* 添付プレビュー */}
+      {selectedAttachment && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", flexShrink: 0,
+          background: TYPE_LABELS[selectedAttachment.type]?.bg || "#f1f5f9",
+          borderRadius: replyTo ? 0 : "8px 8px 0 0",
+          borderLeft: `3px solid ${TYPE_LABELS[selectedAttachment.type]?.color || "#64748b"}`,
+        }}>
+          <div style={{ flex: 1, fontSize: 12, color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontWeight: 600, color: TYPE_LABELS[selectedAttachment.type]?.color }}>
+              {TYPE_LABELS[selectedAttachment.type]?.label}
+            </span>: {selectedAttachment.label}
+          </div>
+          <button onClick={() => setSelectedAttachment(null)}
+            style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 16, cursor: "pointer", padding: "0 4px" }}>✕</button>
+        </div>
+      )}
+
+      {/* 添付検索パネル */}
+      {showAttachPanel && (
+        <div style={{
+          flexShrink: 0, padding: "8px 0", maxHeight: 200, display: "flex", flexDirection: "column", gap: 6,
+        }}>
+          <input name="attach-search" value={attachSearch} onChange={(e) => setAttachSearch(e.target.value)}
+            placeholder="メモ・議事録・TODO・決定を検索..." autoFocus
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, outline: "none" }}
+          />
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {attachLoading && <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 8 }}>検索中...</div>}
+            {!attachLoading && attachResults.length === 0 && attachSearch && (
+              <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 8 }}>該当なし</div>
+            )}
+            {attachResults.map((item) => {
+              const t = TYPE_LABELS[item.type];
+              return (
+                <button key={`${item.type}-${item.id}`}
+                  onClick={() => { setSelectedAttachment(item); setShowAttachPanel(false); setAttachSearch(""); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 10px",
+                    border: "none", borderBottom: "1px solid #f1f5f9", background: "#fff", cursor: "pointer",
+                    textAlign: "left", fontSize: 12,
+                  }}
+                >
+                  <span style={{
+                    padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 700,
+                    background: t?.bg, color: t?.color, flexShrink: 0,
+                  }}>{t?.label}</span>
+                  <span style={{ color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{item.label}</span>
+                  {item.client_name && (
+                    <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0 }}>{item.client_name}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 入力欄 */}
-      <div style={{ display: "flex", gap: 8, padding: "8px 0 0", flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 8, padding: "8px 0 0", flexShrink: 0, alignItems: "center" }}>
+        <button
+          onClick={() => { setShowAttachPanel(!showAttachPanel); if (showAttachPanel) setAttachSearch(""); }}
+          style={{
+            width: 38, height: 38, borderRadius: "50%", border: "1px solid #e2e8f0",
+            background: showAttachPanel ? "#f0fdf4" : "#fff",
+            color: showAttachPanel ? "#15803d" : "#64748b",
+            fontSize: 20, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >{showAttachPanel ? "✕" : "+"}</button>
         <input name="team-message" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); sendMessage(); } }}
           placeholder="メッセージを入力..."
@@ -322,6 +489,7 @@ export default function TeamChatPage() {
             padding: "10px 20px", borderRadius: 12, border: "none",
             background: sending || !input.trim() ? "#94a3b8" : "#15803d",
             color: "#fff", fontSize: 14, fontWeight: 700, cursor: sending || !input.trim() ? "default" : "pointer",
+            flexShrink: 0,
           }}
         >送信</button>
       </div>

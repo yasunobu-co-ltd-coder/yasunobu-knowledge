@@ -33,15 +33,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "DB not configured" }, { status: 500 });
   }
 
-  const { channel_id, user_id, user_name, content } = await req.json();
+  const { channel_id, user_id, user_name, content, reply_to_id, attachment_type, attachment_id } = await req.json();
 
   if (!channel_id || !user_id || !user_name || !content) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
+  const row: Record<string, unknown> = { channel_id, user_id, user_name, content };
+  if (reply_to_id) row.reply_to_id = reply_to_id;
+  if (attachment_type && attachment_id) {
+    row.attachment_type = attachment_type;
+    row.attachment_id = attachment_id;
+  }
+
   const { data, error } = await supabase
     .from("team_messages")
-    .insert({ channel_id, user_id, user_name, content })
+    .insert(row)
     .select()
     .single();
 
