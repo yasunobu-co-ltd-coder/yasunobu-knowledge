@@ -12,7 +12,8 @@ type TeamMessage = {
   reply_to_id: string | null; attachment_type: string | null; attachment_id: string | null;
 };
 type ReadStatus = { user_id: string; last_read_at: string };
-type AttachmentItem = { id: string; type: "memo" | "minutes" | "todo" | "decision"; label: string; client_name: string | null };
+type AttachmentItem = { id: string; type: "memo" | "minutes" | "todo" | "decision"; label: string; client_name: string | null; date: string | null };
+type ClientItem = { id: string; name: string };
 
 const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   memo: { label: "メモ", color: "#1d4ed8", bg: "#dbeafe" },
@@ -42,15 +43,17 @@ export default function TeamChatPage() {
 
   // 添付
   const [showAttachPanel, setShowAttachPanel] = useState(false);
+  const [attachStep, setAttachStep] = useState<"client" | "items">("client");
+  const [attachClientName, setAttachClientName] = useState("");
   const [attachSearch, setAttachSearch] = useState("");
   const [attachResults, setAttachResults] = useState<AttachmentItem[]>([]);
   const [selectedAttachment, setSelectedAttachment] = useState<AttachmentItem | null>(null);
   const [attachLoading, setAttachLoading] = useState(false);
-  const attachSearchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ===== SWRでキャッシュ付きデータ取得 =====
   const { data: allUsers } = useSWR<AppUser[]>("/api/users", fetcher, { dedupingInterval: 60000 });
   const { data: channels, mutate: mutateChannels } = useSWR<Channel[]>("/api/team-chat/channels", fetcher, { dedupingInterval: 30000 });
+  const { data: clientList } = useSWR<ClientItem[]>("/api/clients", fetcher, { dedupingInterval: 60000 });
 
   // メッセージ: チャンネルごとにキャッシュ → 切替時に即表示
   const msgKey = activeChannelId ? `/api/team-chat/messages?channel_id=${activeChannelId}&limit=100` : null;
@@ -153,23 +156,37 @@ export default function TeamChatPage() {
     return readStatuses.filter((rs) => rs.user_id !== user?.id && new Date(rs.last_read_at).getTime() >= msgTime).length;
   };
 
-  // 添付検索（デバウンス）
-  const searchAttachments = useCallback((q: string) => {
-    clearTimeout(attachSearchTimer.current);
-    attachSearchTimer.current = setTimeout(async () => {
-      setAttachLoading(true);
-      try {
-        const res = await fetch(`/api/team-chat/attachments?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        if (Array.isArray(data)) setAttachResults(data);
-      } catch { /* ignore */ }
-      setAttachLoading(false);
-    }, 300);
+  // 顧客のアイテムを取得
+  const loadClientItems = useCallback(async (clientName: string, q = "") => {
+    setAttachLoading(true);
+    try {
+      const params = new URLSearchParams({ client_name: clientName });
+      if (q) params.set("q", q);
+      const res = await fetch(`/api/team-chat/attachments?${params}`);
+      const data = await res.json();
+      if (Array.isArray(data)) setAttachResults(data);
+    } catch { /* ignore */ }
+    setAttachLoading(false);
   }, []);
 
+  // 顧客選択時にアイテムを取得
+  const selectAttachClient = useCallback((name: string) => {
+    setAttachClientName(name);
+    setAttachStep("items");
+    setAttachSearch("");
+    loadClientItems(name);
+  }, [loadClientItems]);
+
+  // アイテム検索のデバウンス
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
-    if (showAttachPanel) searchAttachments(attachSearch);
-  }, [attachSearch, showAttachPanel, searchAttachments]);
+    if (attachStep !== "items" || !attachClientName) return;
+    clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      loadClientItems(attachClientName, attachSearch);
+    }, 300);
+    return () => clearTimeout(searchTimerRef.current);
+  }, [attachSearch, attachStep, attachClientName, loadClientItems]);
 
   const sendMessage = async () => {
     if (!input.trim() || !user || !activeChannelId || sendingRef.current) return;
@@ -382,50 +399,76 @@ export default function TeamChatPage() {
         </div>
       )}
 
-      {/* 添付検索パネル */}
+      {/* 添付パネル: 顧客選択 → アイテム一覧 */}
       {showAttachPanel && (
         <div style={{
-          flexShrink: 0, padding: "8px 0", maxHeight: 200, display: "flex", flexDirection: "column", gap: 6,
+          flexShrink: 0, padding: "8px 0", maxHeight: 240, display: "flex", flexDirection: "column", gap: 6,
+          borderTop: "1px solid #e2e8f0",
         }}>
-          <input name="attach-search" value={attachSearch} onChange={(e) => setAttachSearch(e.target.value)}
-            placeholder="メモ・議事録・TODO・決定を検索..." autoFocus
-            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, outline: "none" }}
-          />
-          <div style={{ overflowY: "auto", flex: 1 }}>
-            {attachLoading && <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 8 }}>検索中...</div>}
-            {!attachLoading && attachResults.length === 0 && attachSearch && (
-              <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 8 }}>該当なし</div>
-            )}
-            {attachResults.map((item) => {
-              const t = TYPE_LABELS[item.type];
-              return (
-                <button key={`${item.type}-${item.id}`}
-                  onClick={() => { setSelectedAttachment(item); setShowAttachPanel(false); setAttachSearch(""); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 10px",
-                    border: "none", borderBottom: "1px solid #f1f5f9", background: "#fff", cursor: "pointer",
-                    textAlign: "left", fontSize: 12,
-                  }}
-                >
-                  <span style={{
-                    padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 700,
-                    background: t?.bg, color: t?.color, flexShrink: 0,
-                  }}>{t?.label}</span>
-                  <span style={{ color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{item.label}</span>
-                  {item.client_name && (
-                    <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0 }}>{item.client_name}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          {attachStep === "client" ? (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", padding: "0 4px" }}>顧客を選択:</div>
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {clientList?.map((c) => (
+                  <button key={c.id} onClick={() => selectAttachClient(c.name)}
+                    style={{
+                      display: "block", width: "100%", padding: "8px 12px", border: "none",
+                      borderBottom: "1px solid #f1f5f9", background: "#fff", cursor: "pointer",
+                      textAlign: "left", fontSize: 13, color: "#1e293b", fontWeight: 500,
+                    }}
+                  >{c.name}</button>
+                ))}
+                {(!clientList || clientList.length === 0) && (
+                  <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 16 }}>顧客がありません</div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px" }}>
+                <button onClick={() => { setAttachStep("client"); setAttachResults([]); setAttachSearch(""); }}
+                  style={{ background: "none", border: "none", fontSize: 14, color: "#15803d", cursor: "pointer", fontWeight: 700, padding: 0 }}>← 戻る</button>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{attachClientName}</span>
+              </div>
+              <input name="attach-search" value={attachSearch} onChange={(e) => setAttachSearch(e.target.value)}
+                placeholder="絞り込み..."
+                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12, outline: "none" }}
+              />
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {attachLoading && <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 8 }}>読み込み中...</div>}
+                {!attachLoading && attachResults.length === 0 && (
+                  <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 8 }}>データなし</div>
+                )}
+                {attachResults.map((item) => {
+                  const t = TYPE_LABELS[item.type];
+                  return (
+                    <button key={`${item.type}-${item.id}`}
+                      onClick={() => { setSelectedAttachment(item); setShowAttachPanel(false); setAttachStep("client"); setAttachSearch(""); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 10px",
+                        border: "none", borderBottom: "1px solid #f1f5f9", background: "#fff", cursor: "pointer",
+                        textAlign: "left", fontSize: 12,
+                      }}
+                    >
+                      <span style={{
+                        padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 700,
+                        background: t?.bg, color: t?.color, flexShrink: 0,
+                      }}>{t?.label}</span>
+                      <span style={{ color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{item.label}</span>
+                      {item.date && <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0 }}>{item.date}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* 入力欄 */}
       <div style={{ display: "flex", gap: 8, padding: "8px 0 0", flexShrink: 0, alignItems: "center" }}>
         <button
-          onClick={() => { setShowAttachPanel(!showAttachPanel); if (showAttachPanel) setAttachSearch(""); }}
+          onClick={() => { setShowAttachPanel(!showAttachPanel); if (showAttachPanel) { setAttachSearch(""); setAttachStep("client"); setAttachResults([]); } }}
           style={{
             width: 38, height: 38, borderRadius: "50%", border: "1px solid #e2e8f0",
             background: showAttachPanel ? "#f0fdf4" : "#fff",
