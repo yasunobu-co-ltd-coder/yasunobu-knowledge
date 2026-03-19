@@ -12,15 +12,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "user_id and channel_id required" }, { status: 400 });
   }
 
-  // UPSERT: 既存なら更新、なければ挿入
-  const { error } = await supabase
+  const now = new Date().toISOString();
+
+  // まず既存レコードを確認
+  const { data: existing } = await supabase
     .from("team_read_status")
-    .upsert(
-      { user_id, channel_id, last_read_at: new Date().toISOString() },
-      { onConflict: "user_id,channel_id" }
-    );
+    .select("user_id")
+    .eq("user_id", user_id)
+    .eq("channel_id", channel_id)
+    .maybeSingle();
+
+  let error;
+  if (existing) {
+    ({ error } = await supabase
+      .from("team_read_status")
+      .update({ last_read_at: now })
+      .eq("user_id", user_id)
+      .eq("channel_id", channel_id));
+  } else {
+    ({ error } = await supabase
+      .from("team_read_status")
+      .insert({ user_id, channel_id, last_read_at: now }));
+  }
 
   if (error) {
+    console.error("team_read_status error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

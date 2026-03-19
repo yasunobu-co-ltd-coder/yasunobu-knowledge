@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { sendPushToChannelMembers } from "@/lib/push";
 
 export async function GET(req: NextRequest) {
   if (!isSupabaseConfigured || !supabase) {
@@ -47,6 +48,20 @@ export async function POST(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // チャンネル名取得してPush通知（非同期）
+  supabase
+    .from("team_channels")
+    .select("name")
+    .eq("id", channel_id)
+    .single()
+    .then(({ data: ch }) => {
+      sendPushToChannelMembers(channel_id, user_id, {
+        title: `${ch?.name || "チャット"} - ${user_name}`,
+        body: content.slice(0, 100),
+        url: "/team-chat",
+      });
+    });
 
   return NextResponse.json(data);
 }
