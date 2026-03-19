@@ -135,7 +135,7 @@ export default function CalendarPage() {
               key={dateStr}
               onClick={() => setSelectedDate(isSelected ? null : dateStr)}
               style={{
-                minHeight: 52,
+                height: 54,
                 background: isSelected ? "#f0fdf4" : "#fff",
                 border: isToday
                   ? "2px solid #15803d"
@@ -143,9 +143,9 @@ export default function CalendarPage() {
                     ? "2px solid #86efac"
                     : "1px solid #e2e8f0",
                 borderRadius: 6,
-                padding: "2px 3px",
+                padding: "2px 2px",
                 cursor: "pointer",
-                position: "relative",
+                overflow: "hidden",
               }}
             >
               <div
@@ -155,41 +155,43 @@ export default function CalendarPage() {
                   color: dow === 0 ? "#ef4444" : dow === 6 ? "#3b82f6" : "#334155",
                   textAlign: "right",
                   lineHeight: 1,
-                  padding: "2px 2px 0 0",
+                  padding: "1px 2px 0 0",
                 }}
               >
                 {day}
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 1 }}>
-                {dayEvents.slice(0, 3).map((ev) => {
-                  const c = TYPE_COLORS[ev.type] || TYPE_COLORS.memo;
-                  return (
-                    <div
-                      key={ev.id}
-                      style={{
-                        background: c.bg,
-                        borderRadius: 3,
-                        padding: "0 3px",
-                        fontSize: 8,
-                        color: c.text,
-                        fontWeight: 600,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        lineHeight: "14px",
-                        opacity: ev.status === "done" || ev.status === "cancelled" ? 0.4 : 1,
-                      }}
-                    >
-                      {ev.label}
+              {dayEvents.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 2 }}>
+                  {dayEvents.slice(0, 2).map((ev) => {
+                    const c = TYPE_COLORS[ev.type] || TYPE_COLORS.memo;
+                    return (
+                      <div
+                        key={ev.id}
+                        style={{
+                          background: c.bg,
+                          borderRadius: 2,
+                          padding: "0 2px",
+                          fontSize: 7,
+                          color: c.text,
+                          fontWeight: 600,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          lineHeight: "12px",
+                          opacity: ev.status === "done" || ev.status === "cancelled" ? 0.4 : 1,
+                        }}
+                      >
+                        {ev.label.slice(0, 6)}
+                      </div>
+                    );
+                  })}
+                  {dayEvents.length > 2 && (
+                    <div style={{ fontSize: 7, color: "#94a3b8", textAlign: "center", lineHeight: 1 }}>
+                      +{dayEvents.length - 2}
                     </div>
-                  );
-                })}
-                {dayEvents.length > 3 && (
-                  <div style={{ fontSize: 8, color: "#94a3b8", textAlign: "center" }}>
-                    +{dayEvents.length - 3}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
