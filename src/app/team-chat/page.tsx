@@ -127,14 +127,23 @@ export default function TeamChatPage() {
 
   const createChannel = async () => {
     if (!newChannelName.trim()) return;
-    await fetch("/api/team-chat/channels", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newChannelName.trim() }),
-    });
-    setNewChannelName("");
-    setShowNewChannel(false);
-    mutateChannels();
+    try {
+      const res = await fetch("/api/team-chat/channels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newChannelName.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`チャンネル作成エラー: ${err.error || res.statusText}`);
+        return;
+      }
+      setNewChannelName("");
+      setShowNewChannel(false);
+      mutateChannels();
+    } catch (e) {
+      alert(`通信エラー: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const activeChannel = channels?.find((c) => c.id === activeChannelId);
@@ -185,6 +194,7 @@ export default function TeamChatPage() {
       {showNewChannel && (
         <div style={{ display: "flex", gap: 6, padding: "4px 0 8px", flexShrink: 0 }}>
           <input
+            name="channel-name"
             value={newChannelName}
             onChange={(e) => setNewChannelName(e.target.value)}
             placeholder="チャンネル名"
@@ -275,6 +285,7 @@ export default function TeamChatPage() {
       {/* 入力欄 */}
       <div style={{ display: "flex", gap: 8, padding: "8px 0 0", flexShrink: 0 }}>
         <input
+          name="team-message"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {

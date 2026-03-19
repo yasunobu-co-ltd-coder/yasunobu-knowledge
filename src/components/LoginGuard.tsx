@@ -8,7 +8,7 @@ const COMMIT_SHA = process.env.NEXT_PUBLIC_COMMIT_SHA || "dev";
 const VALID_PIN = process.env.NEXT_PUBLIC_APP_PIN || "";
 
 export default function LoginGuard({ children }: { children: React.ReactNode }) {
-  const { user, login } = useUser();
+  const { user, initialized, login } = useUser();
   const [stage, setStage] = useState<"loading" | "pin" | "select" | "ready">("loading");
   const [users, setUsers] = useState<AppUser[]>([]);
   const [pin, setPin] = useState("");
@@ -22,6 +22,9 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
   const dragStartYRef = useRef(0);
 
   useEffect(() => {
+    // UserProviderの初期化を待つ（race condition防止）
+    if (!initialized) return;
+
     const pinOk = !VALID_PIN || sessionStorage.getItem("yasunobu_knowledge_pin_verified") === "true";
 
     if (user && pinOk) {
@@ -34,8 +37,9 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
       return;
     }
 
+    // PIN済み but ユーザー未選択
     fetchUsers().then(() => setStage("select"));
-  }, [user]);
+  }, [user, initialized]);
 
   const fetchUsers = async () => {
     try {
