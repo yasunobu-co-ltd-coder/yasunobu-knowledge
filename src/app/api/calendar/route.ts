@@ -3,6 +3,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export type CalendarEvent = {
   id: string;
+  source_id: string; // 元テーブルのID
   date: string; // YYYY-MM-DD
   label: string;
   type: "memo" | "todo" | "decision" | "minutes";
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
     for (const m of memos) {
       events.push({
         id: `memo-${m.id}`,
+        source_id: String(m.id),
         date: m.due_date,
         label: (m.memo || "").slice(0, 40),
         type: "memo",
@@ -61,6 +63,7 @@ export async function GET(req: NextRequest) {
     for (const t of todos) {
       events.push({
         id: `todo-${t.id}`,
+        source_id: String(t.id),
         date: t.due_date,
         label: t.content.slice(0, 40),
         type: "todo",
@@ -81,6 +84,7 @@ export async function GET(req: NextRequest) {
     for (const d of decisions) {
       events.push({
         id: `dec-${d.id}`,
+        source_id: String(d.id),
         date: d.created_at.slice(0, 10),
         label: d.content.slice(0, 40),
         type: "decision",
@@ -105,6 +109,7 @@ export async function GET(req: NextRequest) {
         if (d >= startDate && d < endDate) {
           events.push({
             id: `min-${m.id}`,
+            source_id: String(m.id),
             date: d,
             label: `次回: ${(m.summary || "").slice(0, 30)}`,
             type: "minutes",

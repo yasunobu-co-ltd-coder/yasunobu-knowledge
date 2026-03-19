@@ -1,14 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTimeline } from "@/lib/knowledge";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = req.nextUrl;
-    const client_name = searchParams.get("client_name") ?? undefined;
-    const source_type = searchParams.get("source_type") as
+
+    // source_id指定: 単一レコード取得（カレンダー詳細用）
+    const sourceId = searchParams.get("source_id");
+    const sourceTypeParam = searchParams.get("source_type") as
       | "memo"
       | "minutes"
       | undefined;
+
+    if (sourceId && sourceTypeParam && isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from("v_knowledge_timeline")
+        .select("*")
+        .eq("id", sourceId)
+        .eq("source_type", sourceTypeParam)
+        .limit(1);
+      if (error) throw error;
+      return NextResponse.json(data ?? []);
+    }
+
+    const client_name = searchParams.get("client_name") ?? undefined;
     const search = searchParams.get("search") ?? undefined;
     const limit = searchParams.get("limit")
       ? Number(searchParams.get("limit"))
@@ -19,7 +35,7 @@ export async function GET(req: NextRequest) {
 
     const data = await getTimeline({
       client_name,
-      source_type,
+      source_type: sourceTypeParam,
       search,
       limit,
       offset,

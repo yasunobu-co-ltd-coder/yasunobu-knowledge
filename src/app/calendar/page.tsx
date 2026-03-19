@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
 import type { CalendarEvent } from "@/app/api/calendar/route";
+import type { KnowledgeTimelineEntry } from "@/types/database";
+import EntryDetailModal from "@/components/EntryDetailModal";
 
 const TYPE_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   memo: { bg: "#dbeafe", text: "#1d4ed8", label: "メモ" },
@@ -19,6 +21,28 @@ export default function CalendarPage() {
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [detailEntry, setDetailEntry] = useState<KnowledgeTimelineEntry | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // イベントクリック→詳細モーダル
+  const handleEventClick = useCallback(async (ev: CalendarEvent) => {
+    if (ev.type === "memo" || ev.type === "minutes") {
+      setLoadingDetail(true);
+      try {
+        const sourceType = ev.type === "memo" ? "memo" : "minutes";
+        const res = await fetch(`/api/timeline?source_id=${ev.source_id}&source_type=${sourceType}`);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setDetailEntry(data[0]);
+        }
+      } finally {
+        setLoadingDetail(false);
+      }
+    } else if (ev.client_name) {
+      // TODO・決定事項は顧客カルテへ遷移
+      window.location.href = `/clients/${encodeURIComponent(ev.client_name)}`;
+    }
+  }, []);
 
   const { data: events } = useSWR<CalendarEvent[]>(
     `/api/calendar?year=${year}&month=${month}`,
@@ -213,12 +237,14 @@ export default function CalendarPage() {
               return (
                 <div
                   key={ev.id}
+                  onClick={() => handleEventClick(ev)}
                   style={{
                     background: "#fff",
                     border: "1px solid #e2e8f0",
                     borderRadius: 8,
                     padding: "10px 12px",
                     opacity: ev.status === "done" || ev.status === "cancelled" ? 0.5 : 1,
+                    cursor: "pointer",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -235,12 +261,11 @@ export default function CalendarPage() {
                       {c.label}
                     </span>
                     {ev.client_name && (
-                      <a
-                        href={`/clients/${encodeURIComponent(ev.client_name)}`}
-                        style={{ fontSize: 11, color: "#15803d", textDecoration: "none", fontWeight: 600 }}
+                      <span
+                        style={{ fontSize: 11, color: "#15803d", fontWeight: 600 }}
                       >
                         {ev.client_name}
-                      </a>
+                      </span>
                     )}
                     {ev.status && (
                       <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: "auto" }}>
@@ -256,6 +281,23 @@ export default function CalendarPage() {
             })
           )}
         </div>
+      )}
+      {/* 詳細読み込み中 */}
+      {loadingDetail && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 100,
+          background: "rgba(0,0,0,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "20px 32px", fontSize: 14, color: "#334155" }}>
+            読み込み中...
+          </div>
+        </div>
+      )}
+
+      {/* 詳細モーダル */}
+      {detailEntry && (
+        <EntryDetailModal entry={detailEntry} onClose={() => setDetailEntry(null)} />
       )}
     </div>
   );
