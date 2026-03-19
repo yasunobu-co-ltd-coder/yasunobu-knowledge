@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import useSWR from "swr";
+import useSWR, { mutate as globalMutate } from "swr";
 import { fetcher } from "@/lib/swr";
 import { useUser, AppUser } from "@/lib/user-context";
 import { supabase } from "@/lib/supabase";
@@ -24,8 +24,6 @@ const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> 
 export default function TeamChatPage() {
   const { user } = useUser();
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<TeamMessage[]>([]);
-  const [readStatuses, setReadStatuses] = useState<ReadStatus[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
@@ -38,7 +36,6 @@ export default function TeamChatPage() {
 
   // メンバー管理
   const [showMembers, setShowMembers] = useState(false);
-  const [channelMembers, setChannelMembers] = useState<string[]>([]);
 
   // リプライ
   const [replyTo, setReplyTo] = useState<TeamMessage | null>(null);
@@ -51,9 +48,31 @@ export default function TeamChatPage() {
   const [attachLoading, setAttachLoading] = useState(false);
   const attachSearchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // ユーザー一覧
+  // ===== SWRでキャッシュ付きデータ取得 =====
   const { data: allUsers } = useSWR<AppUser[]>("/api/users", fetcher, { dedupingInterval: 60000 });
   const { data: channels, mutate: mutateChannels } = useSWR<Channel[]>("/api/team-chat/channels", fetcher, { dedupingInterval: 30000 });
+
+  // メッセージ: チャンネルごとにキャッシュ → 切替時に即表示
+  const msgKey = activeChannelId ? `/api/team-chat/messages?channel_id=${activeChannelId}&limit=100` : null;
+  const { data: messages = [], mutate: mutateMessages } = useSWR<TeamMessage[]>(msgKey, fetcher, {
+    dedupingInterval: 5000,
+    revalidateOnFocus: false,
+  });
+
+  // 既読状況: チャンネルごとにキャッシュ
+  const readKey = activeChannelId ? `/api/team-chat/readers?channel_id=${activeChannelId}` : null;
+  const { data: readStatuses = [] } = useSWR<ReadStatus[]>(readKey, fetcher, {
+    dedupingInterval: 5000,
+    revalidateOnFocus: false,
+  });
+
+  // メンバー: チャンネルごとにキャッシュ
+  const memberKey = activeChannelId ? `/api/team-chat/channels/${activeChannelId}/members` : null;
+  const { data: memberData, mutate: mutateMembers } = useSWR<{ user_id: string }[]>(memberKey, fetcher, {
+    dedupingInterval: 30000,
+    revalidateOnFocus: false,
+  });
+  const channelMembers = memberData?.map((m) => m.user_id) ?? [];
 
   // SW登録 + Push購読
   useEffect(() => {
@@ -84,41 +103,17 @@ export default function TeamChatPage() {
     }
   }, [channels, activeChannelId]);
 
-  const markAsRead = useCallback(async (channelId: string) => {
-    if (!user) return;
+  // チャンネル切替時に既読マーク（fire-and-forget）
+  useEffect(() => {
+    if (!activeChannelId || !user) return;
     fetch("/api/team-chat/read", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: user.id, channel_id: channelId }),
+      body: JSON.stringify({ user_id: user.id, channel_id: activeChannelId }),
     });
-  }, [user]);
+  }, [activeChannelId, user]);
 
-  const loadChannelData = useCallback(async (channelId: string) => {
-    // messages, readStatuses, members, markAsRead を全て並列実行
-    const [msgRes, readRes, memRes] = await Promise.all([
-      fetch(`/api/team-chat/messages?channel_id=${channelId}&limit=100`).then((r) => r.json()).catch(() => []),
-      fetch(`/api/team-chat/readers?channel_id=${channelId}`).then((r) => r.json()).catch(() => []),
-      fetch(`/api/team-chat/channels/${channelId}/members`).then((r) => r.json()).catch(() => []),
-    ]);
-    if (Array.isArray(msgRes)) setMessages(msgRes);
-    if (Array.isArray(readRes)) setReadStatuses(readRes);
-    if (Array.isArray(memRes)) setChannelMembers(memRes.map((m: { user_id: string }) => m.user_id));
-    markAsRead(channelId);
-  }, [markAsRead]);
-
-  useEffect(() => {
-    if (activeChannelId) loadChannelData(activeChannelId);
-  }, [activeChannelId, loadChannelData]);
-
-  // Realtime
-  const loadReadStatuses = useCallback(async (channelId: string) => {
-    try {
-      const res = await fetch(`/api/team-chat/readers?channel_id=${channelId}`);
-      const data = await res.json();
-      if (Array.isArray(data)) setReadStatuses(data);
-    } catch { /* ignore */ }
-  }, []);
-
+  // Realtime: 新メッセージ受信
   useEffect(() => {
     if (!activeChannelId || !supabase) return;
     const channel = supabase
@@ -126,19 +121,22 @@ export default function TeamChatPage() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages", filter: `channel_id=eq.${activeChannelId}` },
         (payload) => {
           const newMsg = payload.new as TeamMessage;
-          setMessages((prev) => prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
-          // markAsRead + readStatuses を並列実行（即時）
-          Promise.all([
-            markAsRead(activeChannelId),
-            fetch(`/api/team-chat/readers?channel_id=${activeChannelId}`).then((r) => r.json()).then((data) => {
-              if (Array.isArray(data)) setReadStatuses(data);
-            }),
-          ]);
+          // SWRキャッシュにoptimistic追加（APIを待たず即表示）
+          mutateMessages((prev) => prev && !prev.some((m) => m.id === newMsg.id) ? [...prev, newMsg] : prev, false);
+          // 既読マーク + 既読状況を並列更新
+          if (user) {
+            fetch("/api/team-chat/read", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ user_id: user.id, channel_id: activeChannelId }),
+            });
+          }
+          globalMutate(readKey);
         }
       )
       .subscribe();
     return () => { supabase!.removeChannel(channel); };
-  }, [activeChannelId, markAsRead]);
+  }, [activeChannelId, user, mutateMessages, readKey]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -187,7 +185,7 @@ export default function TeamChatPage() {
       });
       if (res.ok) {
         const newMsg = await res.json();
-        setMessages((prev) => prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
+        mutateMessages((prev) => prev && !prev.some((m) => m.id === newMsg.id) ? [...prev, newMsg] : prev, false);
         setInput("");
         setReplyTo(null);
         setSelectedAttachment(null);
@@ -228,15 +226,14 @@ export default function TeamChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId }),
       });
-      setChannelMembers((prev) => prev.filter((id) => id !== userId));
     } else {
       await fetch(`/api/team-chat/channels/${activeChannelId}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_ids: [userId] }),
       });
-      setChannelMembers((prev) => [...prev, userId]);
     }
+    mutateMembers();
   };
 
   // リプライ先のメッセージを探す
@@ -300,7 +297,7 @@ export default function TeamChatPage() {
       {activeChannel && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0 8px", flexShrink: 0 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{activeChannel.name}</span>
-          <button onClick={() => { setShowMembers(!showMembers); if (!showMembers) loadChannelData(activeChannelId!); }}
+          <button onClick={() => setShowMembers(!showMembers)}
             style={{ fontSize: 11, color: "#64748b", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 12, padding: "2px 10px", cursor: "pointer" }}
           >{showMembers ? "閉じる" : `メンバー(${channelMembers.length})`}</button>
         </div>
