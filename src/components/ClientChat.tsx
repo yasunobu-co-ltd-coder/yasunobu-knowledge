@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { ChatMessage } from "@/types/database";
+import { useUser } from "@/lib/user-context";
 
 const QUICK_PROMPTS = [
   "この顧客の状況を要約して",
@@ -11,6 +12,7 @@ const QUICK_PROMPTS = [
 ];
 
 export default function ClientChat({ clientName }: { clientName: string }) {
+  const { user } = useUser();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -125,7 +127,7 @@ export default function ClientChat({ clientName }: { clientName: string }) {
       const res = await fetch(`${apiBase}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text.trim(), thread_id: threadId }),
+        body: JSON.stringify({ message: text.trim(), thread_id: threadId, user_name: user?.name }),
       });
 
       if (!res.ok) {

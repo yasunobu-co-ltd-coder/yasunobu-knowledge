@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import PinGuard from "@/components/PinGuard";
+import { UserProvider } from "@/lib/user-context";
+import LoginGuard from "@/components/LoginGuard";
+import HeaderUser from "@/components/HeaderUser";
 
 const APP_VERSION = "v0.1";
 
@@ -54,7 +56,8 @@ export default function RootLayout({
           flexDirection: "column",
         }}
       >
-        <PinGuard>
+        <UserProvider>
+        <LoginGuard>
           {/* ヘッダー */}
           <header
             style={{
@@ -109,6 +112,7 @@ export default function RootLayout({
                 ({process.env.NEXT_PUBLIC_COMMIT_SHA ?? "dev"})
               </span>
             </a>
+            <HeaderUser />
           </header>
 
           {/* メインコンテンツ */}
@@ -146,8 +150,10 @@ export default function RootLayout({
             <NavItem href="/timeline" label="タイムライン" icon="&#128209;" />
             <NavItem href="/clients" label="顧客" icon="&#128101;" />
             <NavItem href="/calendar" label="カレンダー" icon="&#128197;" />
+            <NavItem href="/team-chat" label="チャット" icon="&#128172;" />
           </nav>
-        </PinGuard>
+        </LoginGuard>
+        </UserProvider>
       </body>
     </html>
   );

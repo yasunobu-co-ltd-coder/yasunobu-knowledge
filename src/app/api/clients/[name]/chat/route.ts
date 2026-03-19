@@ -127,7 +127,8 @@ async function executeTool(
   name: string,
   args: Record<string, unknown>,
   clientName: string,
-  threadId: string
+  threadId: string,
+  userName?: string
 ): Promise<{ success: boolean; message: string }> {
   try {
     switch (name) {
@@ -148,6 +149,7 @@ async function executeTool(
           after_value: args.content as string,
           note: "AIチャット経由で作成",
           thread_id: threadId,
+          created_by: userName,
         });
         return { success: true, message: `TODO「${args.content}」を作成しました (ID: ${todo.id})` };
       }
@@ -156,7 +158,7 @@ async function executeTool(
         await updateTodoStatus(
           args.todo_id as string,
           args.status as "open" | "in_progress" | "done" | "cancelled",
-          { note: (args.note as string) || "AIチャット経由で変更", thread_id: threadId }
+          { note: (args.note as string) || "AIチャット経由で変更", thread_id: threadId, created_by: userName }
         );
         return { success: true, message: `TODOのステータスを「${args.status}」に変更しました` };
       }
@@ -183,6 +185,7 @@ async function executeTool(
           after_value: args.content as string,
           note: "AIチャット経由で作成",
           thread_id: threadId,
+          created_by: userName,
         });
         return { success: true, message: `決定事項「${args.content}」を記録しました (ID: ${data.id})` };
       }
@@ -191,7 +194,7 @@ async function executeTool(
         await updateDecisionStatus(
           args.decision_id as string,
           args.status as "active" | "revised" | "cancelled",
-          { note: (args.note as string) || "AIチャット経由で変更", thread_id: threadId }
+          { note: (args.note as string) || "AIチャット経由で変更", thread_id: threadId, created_by: userName }
         );
         return { success: true, message: `決定事項のステータスを「${args.status}」に変更しました` };
       }
@@ -281,9 +284,10 @@ export async function POST(
     const { name } = await params;
     const clientName = decodeURIComponent(name);
     const body = await req.json();
-    const { message, thread_id } = body as {
+    const { message, thread_id, user_name } = body as {
       message: string;
       thread_id: string;
+      user_name?: string;
     };
 
     if (!message || !thread_id) {
@@ -401,7 +405,7 @@ export async function POST(
                 parsedArgs = {};
               }
 
-              const result = await executeTool(tc.name, parsedArgs, clientName, thread_id);
+              const result = await executeTool(tc.name, parsedArgs, clientName, thread_id, user_name);
               actionResults.push(result.message);
 
               currentMessages.push({
