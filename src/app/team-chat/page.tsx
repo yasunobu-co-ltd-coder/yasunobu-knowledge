@@ -114,16 +114,16 @@ export default function TeamChatPage() {
   }, [activeChannelId, user]);
 
   // Realtime: 新メッセージ受信
+  const realtimeOk = useRef(false);
   useEffect(() => {
     if (!activeChannelId || !supabase) return;
+    realtimeOk.current = false;
     const channel = supabase
       .channel(`team-chat-${activeChannelId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages", filter: `channel_id=eq.${activeChannelId}` },
         (payload) => {
           const newMsg = payload.new as TeamMessage;
-          // SWRキャッシュにoptimistic追加（APIを待たず即表示）
           mutateMessages((prev) => prev && !prev.some((m) => m.id === newMsg.id) ? [...prev, newMsg] : prev, false);
-          // 既読マーク + 既読状況を並列更新
           if (user) {
             fetch("/api/team-chat/read", {
               method: "POST",
@@ -134,8 +134,14 @@ export default function TeamChatPage() {
           globalMutate(readKey);
         }
       )
-      .subscribe();
-    return () => { supabase!.removeChannel(channel); };
+      .subscribe((status) => {
+        realtimeOk.current = status === "SUBSCRIBED";
+      });
+    // Realtimeが繋がらない場合のフォールバック: 10秒ごとにポーリング
+    const poll = setInterval(() => {
+      if (!realtimeOk.current) mutateMessages();
+    }, 10000);
+    return () => { clearInterval(poll); supabase!.removeChannel(channel); };
   }, [activeChannelId, user, mutateMessages, readKey]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -475,7 +481,7 @@ export default function TeamChatPage() {
         <input name="team-message" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); sendMessage(); } }}
           placeholder="メッセージを入力..."
-          style={{ flex: 1, padding: "10px 14px", borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 14, outline: "none" }}
+          style={{ flex: 1, padding: "10px 14px", borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 14, outline: "none", color: "#1e293b" }}
           disabled={!user || !activeChannelId}
         />
         <button onClick={sendMessage} disabled={sending || !input.trim() || !user}

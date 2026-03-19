@@ -7,5 +7,7 @@ export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 
 // 環境変数未設定でもビルド・起動は通る（API呼び出し時にエラーを返す）
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      realtime: { params: { eventsPerSecond: 10 } },
+    })
   : null;

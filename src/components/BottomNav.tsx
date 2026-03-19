@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useUser } from "@/lib/user-context";
 import { supabase } from "@/lib/supabase";
 
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
 export default function BottomNav() {
   const { user } = useUser();
   const [unreadCount, setUnreadCount] = useState(0);
+  const realtimeOk = useRef(false);
 
   const fetchUnread = useCallback(async () => {
     if (!user) return;
@@ -25,10 +26,12 @@ export default function BottomNav() {
     } catch { /* ignore */ }
   }, [user]);
 
-  // 初回 + 定期ポーリング
+  // 初回 + ポーリング（Realtime未接続時は10秒、接続時は60秒）
   useEffect(() => {
     fetchUnread();
-    const interval = setInterval(fetchUnread, 30000); // 30秒ごと
+    const interval = setInterval(() => {
+      fetchUnread();
+    }, realtimeOk.current ? 60000 : 10000);
     return () => clearInterval(interval);
   }, [fetchUnread]);
 
@@ -42,15 +45,15 @@ export default function BottomNav() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "team_messages" },
         (payload) => {
-          // 自分のメッセージは除外
           if (payload.new && (payload.new as { user_id: string }).user_id !== user.id) {
             setUnreadCount((prev) => prev + 1);
-            // ブラウザ通知
             sendBrowserNotification(payload.new as { user_name: string; content: string });
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        realtimeOk.current = status === "SUBSCRIBED";
+      });
 
     return () => {
       supabase!.removeChannel(channel);
@@ -130,8 +133,8 @@ function sendBrowserNotification(msg: { user_name: string; content: string }) {
   if (!enabled) return;
   if (typeof Notification === "undefined") return;
   if (Notification.permission !== "granted") return;
-  // ページがフォアグラウンドならスキップ
-  if (document.visibilityState === "visible") return;
+  // チャットページをアクティブに見ている場合のみスキップ
+  if (document.visibilityState === "visible" && window.location.pathname === "/team-chat") return;
 
   new Notification(`${msg.user_name}`, {
     body: msg.content.slice(0, 100),
