@@ -260,8 +260,10 @@ async function executeTool(
       default:
         return { success: false, message: `未知のツール: ${name}` };
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message
+      : (typeof err === "object" && err !== null && "message" in err) ? String((err as { message: unknown }).message)
+      : JSON.stringify(err);
     return { success: false, message: `エラー: ${msg}` };
   }
 }
