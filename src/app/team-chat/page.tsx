@@ -336,7 +336,16 @@ export default function TeamChatPage() {
           <SwipeableMessage key={msg.id} msg={msg} isMe={msg.user_id === user?.id}
             readCount={getReadCount(msg)} replyTarget={getReplyTarget(msg)}
             attType={msg.attachment_type ? TYPE_LABELS[msg.attachment_type] : null}
-            onReply={() => setReplyTo(msg)} />
+            onReply={() => setReplyTo(msg)}
+            onDelete={async () => {
+              if (!user || !confirm("このメッセージを取り消しますか？")) return;
+              const res = await fetch("/api/team-chat/messages", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message_id: msg.id, user_id: user.id }),
+              });
+              if (res.ok) mutateMessages((prev) => prev?.filter((m) => m.id !== msg.id), false);
+            }} />
         ))}
         <div ref={bottomRef} />
       </div>
@@ -458,13 +467,15 @@ const actionBtnStyle: React.CSSProperties = {
 
 const SWIPE_THRESHOLD = 60;
 
-function SwipeableMessage({ msg, isMe, readCount, replyTarget, attType, onReply }: {
+function SwipeableMessage({ msg, isMe, readCount, replyTarget, attType, onReply, onDelete }: {
   msg: TeamMessage; isMe: boolean; readCount: number | null;
   replyTarget: TeamMessage | null;
   attType: { label: string; color: string; bg: string } | null;
   onReply: () => void;
+  onDelete: () => void;
 }) {
   const [offsetX, setOffsetX] = useState(0);
+  const [showMenu, setShowMenu] = useState(false);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const swiping = useRef(false);
@@ -482,7 +493,6 @@ function SwipeableMessage({ msg, isMe, readCount, replyTarget, attType, onReply 
   const onTouchMove = (e: React.TouchEvent) => {
     const dx = e.touches[0].clientX - touchStartX.current;
     const dy = e.touches[0].clientY - touchStartY.current;
-    // 縦スクロールの方が大きければスワイプ無視
     if (!swiping.current && Math.abs(dy) > Math.abs(dx)) return;
     if (dx > 10) swiping.current = true;
     if (!swiping.current) return;
@@ -491,7 +501,6 @@ function SwipeableMessage({ msg, isMe, readCount, replyTarget, attType, onReply 
     setOffsetX(clamped);
     if (clamped >= SWIPE_THRESHOLD && !triggered.current) {
       triggered.current = true;
-      // 振動フィードバック
       if (navigator.vibrate) navigator.vibrate(20);
     }
   };
@@ -500,6 +509,12 @@ function SwipeableMessage({ msg, isMe, readCount, replyTarget, attType, onReply 
     if (triggered.current) onReply();
     setOffsetX(0);
     swiping.current = false;
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isMe) setShowMenu(true);
+    else onReply();
   };
 
   return (
@@ -548,7 +563,7 @@ function SwipeableMessage({ msg, isMe, readCount, replyTarget, attType, onReply 
         )}
 
         <div
-          onContextMenu={(e) => { e.preventDefault(); onReply(); }}
+          onContextMenu={handleContextMenu}
           style={{
             maxWidth: "85%", padding: "8px 12px",
             borderRadius: isMe ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
@@ -565,6 +580,32 @@ function SwipeableMessage({ msg, isMe, readCount, replyTarget, attType, onReply 
           )}
         </div>
       </div>
+
+      {/* 送信取り消しメニュー（自分のメッセージのみ） */}
+      {showMenu && (
+        <div onClick={() => setShowMenu(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 200 }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "fixed", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
+              background: "#fff", borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+              padding: 4, minWidth: 160, zIndex: 201,
+            }}>
+            <button onClick={() => { setShowMenu(false); onReply(); }}
+              style={{
+                display: "block", width: "100%", padding: "10px 16px", border: "none",
+                background: "none", fontSize: 14, color: "#1e293b", textAlign: "left", cursor: "pointer",
+                borderRadius: 8,
+              }}>返信</button>
+            <button onClick={() => { setShowMenu(false); onDelete(); }}
+              style={{
+                display: "block", width: "100%", padding: "10px 16px", border: "none",
+                background: "none", fontSize: 14, color: "#ef4444", textAlign: "left", cursor: "pointer",
+                borderRadius: 8,
+              }}>送信取り消し</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

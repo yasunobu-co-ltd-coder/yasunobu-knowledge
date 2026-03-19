@@ -72,3 +72,37 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(data);
 }
+
+/** DELETE: 送信取り消し（送信者本人のみ） */
+export async function DELETE(req: NextRequest) {
+  if (!isSupabaseConfigured || !supabase) {
+    return NextResponse.json({ error: "DB not configured" }, { status: 500 });
+  }
+
+  const { message_id, user_id } = await req.json();
+  if (!message_id || !user_id) {
+    return NextResponse.json({ error: "message_id and user_id required" }, { status: 400 });
+  }
+
+  // 送信者本人か確認
+  const { data: msg } = await supabase
+    .from("team_messages")
+    .select("user_id")
+    .eq("id", message_id)
+    .single();
+
+  if (!msg || msg.user_id !== user_id) {
+    return NextResponse.json({ error: "権限がありません" }, { status: 403 });
+  }
+
+  const { error } = await supabase
+    .from("team_messages")
+    .delete()
+    .eq("id", message_id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
