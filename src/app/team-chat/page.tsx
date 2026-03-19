@@ -47,14 +47,26 @@ export default function TeamChatPage() {
     }
   }, [channels, activeChannelId]);
 
+  // 既読更新
+  const markAsRead = useCallback(async (channelId: string) => {
+    if (!user) return;
+    fetch("/api/team-chat/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id, channel_id: channelId }),
+    });
+  }, [user]);
+
   // メッセージ取得
   const loadMessages = useCallback(async (channelId: string) => {
     try {
       const res = await fetch(`/api/team-chat/messages?channel_id=${channelId}&limit=100`);
       const data = await res.json();
       if (Array.isArray(data)) setMessages(data);
+      // チャンネルを開いたら既読にする
+      markAsRead(channelId);
     } catch { /* ignore */ }
-  }, []);
+  }, [markAsRead]);
 
   useEffect(() => {
     if (activeChannelId) loadMessages(activeChannelId);
@@ -77,10 +89,11 @@ export default function TeamChatPage() {
         (payload) => {
           const newMsg = payload.new as TeamMessage;
           setMessages((prev) => {
-            // 重複防止
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
+          // 表示中なので既読更新
+          markAsRead(activeChannelId);
         }
       )
       .subscribe();

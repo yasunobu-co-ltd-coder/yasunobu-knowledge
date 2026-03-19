@@ -3,6 +3,7 @@ import "./globals.css";
 import { UserProvider } from "@/lib/user-context";
 import LoginGuard from "@/components/LoginGuard";
 import HeaderUser from "@/components/HeaderUser";
+import BottomNav from "@/components/BottomNav";
 
 const APP_VERSION = "v0.1";
 
@@ -125,33 +126,8 @@ export default function RootLayout({
             {children}
           </main>
 
-          {/* ボトムナビ */}
-          <nav
-            style={{
-              position: "fixed",
-              bottom: 0,
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "100%",
-              maxWidth: 600,
-              background: "rgba(255,255,255,0.95)",
-              backdropFilter: "blur(12px)",
-              WebkitBackdropFilter: "blur(12px)",
-              borderTop: "1px solid #e2e8f0",
-              display: "flex",
-              justifyContent: "space-around",
-              alignItems: "center",
-              padding: "8px 0",
-              paddingBottom: "calc(8px + env(safe-area-inset-bottom))",
-              zIndex: 50,
-            }}
-          >
-            <NavItem href="/" label="ホーム" icon="&#127968;" />
-            <NavItem href="/timeline" label="タイムライン" icon="&#128209;" />
-            <NavItem href="/clients" label="顧客" icon="&#128101;" />
-            <NavItem href="/calendar" label="カレンダー" icon="&#128197;" />
-            <NavItem href="/team-chat" label="チャット" icon="&#128172;" />
-          </nav>
+          {/* ボトムナビ（未読バッジ付き） */}
+          <BottomNav />
         </LoginGuard>
         </UserProvider>
       </body>
@@ -159,31 +135,3 @@ export default function RootLayout({
   );
 }
 
-function NavItem({
-  href,
-  label,
-  icon,
-}: {
-  href: string;
-  label: string;
-  icon: string;
-}) {
-  return (
-    <a
-      href={href}
-      style={{
-        textDecoration: "none",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 2,
-        fontSize: 10,
-        color: "#64748b",
-        padding: "4px 8px",
-      }}
-    >
-      <span style={{ fontSize: 20 }}>{icon}</span>
-      <span>{label}</span>
-    </a>
-  );
-}

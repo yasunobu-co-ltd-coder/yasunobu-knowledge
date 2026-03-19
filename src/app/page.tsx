@@ -1,16 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
 import type { KnowledgeTimelineEntry } from "@/types/database";
 import EntryDetailModal from "@/components/EntryDetailModal";
 import { SkeletonList } from "@/components/Skeleton";
 
+const NOTIF_KEY = "yasunobu-knowledge-notifications";
+
 export default function Home() {
   const [search, setSearch] = useState("");
   const [searchKey, setSearchKey] = useState("");
   const [selected, setSelected] = useState<KnowledgeTimelineEntry | null>(null);
+  const [notifEnabled, setNotifEnabled] = useState(true);
+
+  useEffect(() => {
+    setNotifEnabled(localStorage.getItem(NOTIF_KEY) !== "off");
+  }, []);
+
+  const toggleNotif = async () => {
+    if (!notifEnabled) {
+      // ONにする → 通知権限リクエスト
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        await Notification.requestPermission();
+      }
+      localStorage.setItem(NOTIF_KEY, "on");
+      setNotifEnabled(true);
+    } else {
+      localStorage.setItem(NOTIF_KEY, "off");
+      setNotifEnabled(false);
+    }
+  };
 
   const params = new URLSearchParams({ limit: "20" });
   if (searchKey) params.set("search", searchKey);
@@ -98,6 +119,55 @@ export default function Home() {
             <span style={{ fontSize: 11, color: "#94a3b8" }}>{item.sub}</span>
           </a>
         ))}
+      </div>
+
+      {/* 通知設定 */}
+      <div
+        style={{
+          background: "#fff",
+          border: "1px solid #e2e8f0",
+          borderRadius: 12,
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>
+            チャット通知
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8" }}>
+            新着メッセージをブラウザ通知でお知らせ
+          </div>
+        </div>
+        <button
+          onClick={toggleNotif}
+          style={{
+            width: 48,
+            height: 28,
+            borderRadius: 14,
+            border: "none",
+            background: notifEnabled ? "#15803d" : "#cbd5e1",
+            cursor: "pointer",
+            position: "relative",
+            transition: "background 0.2s",
+          }}
+        >
+          <span
+            style={{
+              position: "absolute",
+              top: 3,
+              left: notifEnabled ? 23 : 3,
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              background: "#fff",
+              transition: "left 0.2s",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+            }}
+          />
+        </button>
       </div>
 
       {/* 最新エントリ */}
