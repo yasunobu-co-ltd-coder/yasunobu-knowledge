@@ -25,6 +25,7 @@ export default function ClientsPage() {
       <h1 style={{ fontSize: 18, fontWeight: 700, color: "#1e293b" }}>顧客一覧</h1>
 
       <input
+        name="client-search"
         type="text"
         placeholder="顧客名で検索..."
         value={search}
