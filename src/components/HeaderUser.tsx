@@ -13,7 +13,7 @@ export default function HeaderUser() {
       </span>
       <button
         onClick={() => {
-          sessionStorage.removeItem("yasunobu_knowledge_pin_verified");
+          // PINは維持したまま、ユーザー選択画面に戻る
           logout();
           window.location.href = "/";
         }}

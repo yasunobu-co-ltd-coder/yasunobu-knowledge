@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useUser, AppUser } from "@/lib/user-context";
 
 const APP_VERSION = "v0.1";
@@ -13,6 +13,13 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
   const [users, setUsers] = useState<AppUser[]>([]);
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
+
+  // Drag & Drop
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragStartYRef = useRef(0);
 
   useEffect(() => {
     const pinOk = !VALID_PIN || sessionStorage.getItem("yasunobu_knowledge_pin_verified") === "true";
@@ -27,7 +34,6 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
       return;
     }
 
-    // PIN済み but ユーザー未選択 → ユーザー選択へ
     fetchUsers().then(() => setStage("select"));
   }, [user]);
 
@@ -45,7 +51,6 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
       sessionStorage.setItem("yasunobu_knowledge_pin_verified", "true");
       setError("");
 
-      // PIN通った後にユーザーが既にlocalStorageにいればready
       const stored = localStorage.getItem("yasunobu-knowledge-user");
       if (stored) {
         try {
@@ -55,7 +60,6 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
         } catch { /* ignore */ }
       }
 
-      // ユーザー一覧取得してselect画面へ
       await fetchUsers();
       setTimeout(() => setStage("select"), 300);
     } else {
@@ -64,8 +68,60 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
   };
 
   const handleSelectUser = (u: AppUser) => {
+    if (isDragging) return;
     login(u);
     setTimeout(() => setStage("ready"), 300);
+  };
+
+  // --- Drag & Drop handlers ---
+  const handleDragStart = (index: number, clientY: number) => {
+    dragStartYRef.current = clientY;
+    longPressTimerRef.current = setTimeout(() => {
+      setDragIndex(index);
+      setDragOverIndex(index);
+      setIsDragging(true);
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 250);
+  };
+
+  const handleDragMove = (clientY: number) => {
+    if (!isDragging || dragIndex === null) {
+      if (longPressTimerRef.current && Math.abs(clientY - dragStartYRef.current) > 10) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      return;
+    }
+    const cards = document.querySelectorAll("[data-user-index]");
+    cards.forEach((card) => {
+      const rect = card.getBoundingClientRect();
+      if (clientY >= rect.top && clientY <= rect.bottom) {
+        const idx = parseInt(card.getAttribute("data-user-index") || "0");
+        setDragOverIndex(idx);
+      }
+    });
+  };
+
+  const handleDragEnd = async () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (isDragging && dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
+      const newUsers = [...users];
+      const [moved] = newUsers.splice(dragIndex, 1);
+      newUsers.splice(dragOverIndex, 0, moved);
+      setUsers(newUsers);
+      // sort_order をAPIで一括更新
+      fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orders: newUsers.map((u, i) => ({ id: u.id, sort_order: i })) }),
+      });
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
+    setIsDragging(false);
   };
 
   if (stage === "loading") {
@@ -122,7 +178,7 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
           {APP_VERSION} / {COMMIT_SHA}
         </div>
 
-        {/* PIN入力（最初のステップ） */}
+        {/* PIN入力 */}
         {stage === "pin" && (
           <form onSubmit={handlePinSubmit}>
             <div style={{ fontSize: 14, color: "#334155", fontWeight: 600, marginBottom: 16 }}>
@@ -164,45 +220,65 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
           </form>
         )}
 
-        {/* ユーザー選択（PIN通過後） */}
+        {/* ユーザー選択（ドラッグ並び替え対応） */}
         {stage === "select" && (
           <>
-            <div style={{ fontSize: 14, color: "#334155", fontWeight: 600, marginBottom: 16 }}>
-              ユーザーを選択してください
+            <div style={{ fontSize: 14, color: "#334155", fontWeight: 600, marginBottom: 4 }}>
+              {isDragging ? "ドラッグして並び替え" : "担当者を選択してください"}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 16 }}>
+              長押しで並び替え
+            </div>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: 8 }}
+              onTouchMove={(e) => handleDragMove(e.touches[0].clientY)}
+              onTouchEnd={handleDragEnd}
+              onMouseMove={(e) => handleDragMove(e.clientY)}
+              onMouseUp={handleDragEnd}
+            >
               {users.length === 0 ? (
                 <div style={{ fontSize: 13, color: "#94a3b8", padding: "16px 0" }}>
                   ユーザーが見つかりません
                 </div>
               ) : (
-                users.map((u) => (
-                  <button
+                users.map((u, i) => (
+                  <div
                     key={u.id}
-                    onClick={() => handleSelectUser(u)}
+                    data-user-index={i}
                     style={{
-                      padding: "14px 16px",
-                      borderRadius: 12,
-                      border: "2px solid #e2e8f0",
-                      background: "#fff",
-                      cursor: "pointer",
-                      fontSize: 15,
-                      fontWeight: 600,
-                      color: "#1e293b",
-                      textAlign: "left",
-                      transition: "all 0.15s",
-                    }}
-                    onMouseOver={(e) => {
-                      e.currentTarget.style.borderColor = "#22c55e";
-                      e.currentTarget.style.background = "#f0fdf4";
-                    }}
-                    onMouseOut={(e) => {
-                      e.currentTarget.style.borderColor = "#e2e8f0";
-                      e.currentTarget.style.background = "#fff";
+                      opacity: dragIndex === i ? 0.5 : 1,
+                      transform:
+                        dragOverIndex !== null && dragIndex !== null && dragIndex !== i
+                          ? i > dragIndex && i <= dragOverIndex
+                            ? "translateY(-8px)"
+                            : i < dragIndex && i >= dragOverIndex
+                              ? "translateY(8px)"
+                              : "none"
+                          : "none",
+                      transition: isDragging ? "transform 0.15s ease" : "none",
                     }}
                   >
-                    {u.name}
-                  </button>
+                    <button
+                      onTouchStart={(e) => { e.stopPropagation(); handleDragStart(i, e.touches[0].clientY); }}
+                      onMouseDown={(e) => { e.stopPropagation(); handleDragStart(i, e.clientY); }}
+                      onClick={() => handleSelectUser(u)}
+                      style={{
+                        width: "100%",
+                        padding: "14px 16px",
+                        borderRadius: 12,
+                        border: dragOverIndex === i && isDragging ? "2px solid #22c55e" : "2px solid #e2e8f0",
+                        background: dragOverIndex === i && isDragging ? "#f0fdf4" : "#fff",
+                        cursor: isDragging ? "grabbing" : "pointer",
+                        fontSize: 15,
+                        fontWeight: 600,
+                        color: "#1e293b",
+                        textAlign: "left",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {u.name}
+                    </button>
+                  </div>
                 ))
               )}
             </div>
