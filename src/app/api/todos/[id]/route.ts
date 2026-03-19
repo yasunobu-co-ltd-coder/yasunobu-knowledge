@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateTodoStatus } from "@/lib/knowledge";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import type { TodoStatus } from "@/types/database";
 
 export async function PATCH(
@@ -20,6 +21,25 @@ export async function PATCH(
 
     const data = await updateTodoStatus(id, status);
     return NextResponse.json(data);
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    if (!isSupabaseConfigured || !supabase) {
+      return NextResponse.json({ error: "DB not configured" }, { status: 500 });
+    }
+    const { id } = await params;
+    const { error } = await supabase.from("todos").delete().eq("id", id);
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Unknown error";

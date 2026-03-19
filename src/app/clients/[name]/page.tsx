@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
@@ -19,10 +19,35 @@ export default function ClientDetailPage() {
 
   const apiBase = `/api/clients/${encodeURIComponent(clientName)}`;
 
-  const { data: profile, isLoading } = useSWR<ClientProfile>(
+  const { data: profile, isLoading, mutate } = useSWR<ClientProfile>(
     apiBase,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 10000 }
+  );
+
+  // TODO操作のロック
+  const busyIds = useRef<Set<string>>(new Set());
+
+  const handleTodoAction = useCallback(
+    async (id: string, action: "done" | "delete") => {
+      if (busyIds.current.has(id)) return;
+      busyIds.current.add(id);
+      try {
+        if (action === "done") {
+          await fetch(`/api/todos/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "done" }),
+          });
+        } else {
+          await fetch(`/api/todos/${id}`, { method: "DELETE" });
+        }
+        mutate();
+      } finally {
+        busyIds.current.delete(id);
+      }
+    },
+    [mutate]
   );
 
   // 変更履歴は「logs」タブ選択時のみ取得
@@ -131,38 +156,77 @@ export default function ClientDetailPage() {
                   <div
                     key={todo.id}
                     style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 8,
                       background: "#fff",
                       border: "1px solid #e2e8f0",
                       borderRadius: 8,
                       padding: "10px 12px",
                     }}
                   >
-                    <span
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                      <span
+                        style={{
+                          borderRadius: 4,
+                          padding: "2px 8px",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          flexShrink: 0,
+                          background:
+                            todo.status === "open" ? "#fefce8" : "#dbeafe",
+                          color:
+                            todo.status === "open" ? "#a16207" : "#1d4ed8",
+                        }}
+                      >
+                        {todo.status}
+                      </span>
+                      <span style={{ fontSize: 13, color: "#334155", flex: 1 }}>
+                        {todo.content}
+                      </span>
+                    </div>
+                    <div
                       style={{
-                        borderRadius: 4,
-                        padding: "2px 8px",
-                        fontSize: 11,
-                        fontWeight: 600,
-                        flexShrink: 0,
-                        background:
-                          todo.status === "open" ? "#fefce8" : "#dbeafe",
-                        color:
-                          todo.status === "open" ? "#a16207" : "#1d4ed8",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginTop: 8,
                       }}
                     >
-                      {todo.status}
-                    </span>
-                    <span style={{ fontSize: 13, color: "#334155", flex: 1 }}>
-                      {todo.content}
-                    </span>
-                    {todo.due_date && (
-                      <span style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0 }}>
-                        期限: {todo.due_date}
-                      </span>
-                    )}
+                      <div style={{ display: "flex", gap: 4, fontSize: 11, color: "#94a3b8" }}>
+                        {todo.due_date && <span>期限: {todo.due_date}</span>}
+                        {todo.assignee && <span>/ {todo.assignee}</span>}
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button
+                          onClick={() => handleTodoAction(todo.id, "done")}
+                          style={{
+                            background: "#dcfce7",
+                            color: "#15803d",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "4px 10px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          完了
+                        </button>
+                        <button
+                          onClick={() => handleTodoAction(todo.id, "delete")}
+                          style={{
+                            background: "#fee2e2",
+                            color: "#991b1b",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "4px 10px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

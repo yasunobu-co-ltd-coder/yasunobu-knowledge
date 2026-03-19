@@ -145,8 +145,7 @@ export default function RootLayout({
             <NavItem href="/" label="ホーム" icon="&#127968;" />
             <NavItem href="/timeline" label="タイムライン" icon="&#128209;" />
             <NavItem href="/clients" label="顧客" icon="&#128101;" />
-            <NavItem href="/todos" label="TODO" icon="&#9745;" />
-            <NavItem href="/decisions" label="決定事項" icon="&#128221;" />
+            <NavItem href="/calendar" label="カレンダー" icon="&#128197;" />
           </nav>
         </PinGuard>
       </body>
