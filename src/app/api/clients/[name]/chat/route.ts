@@ -226,10 +226,7 @@ async function executeTool(
             importance: (args.importance as string) || "中",
             urgency: "低",
             profit: "中",
-            assignment_type: "自分で",
-            assignee: "AI",
             status: "open",
-            created_by: "ai-chat",
           });
         if (error) throw error;
         return { success: true, message: `メモ「${(args.body as string).slice(0, 30)}...」を記録しました` };
@@ -248,10 +245,7 @@ async function executeTool(
             importance: (args.importance as string) || "中",
             urgency: "中",
             profit: "中",
-            assignment_type: "自分で",
-            assignee: userName || "AI",
             status: "open",
-            created_by: "ai-chat",
           });
         if (error) throw error;
         return { success: true, message: `カレンダーに「${eventContent}」を${eventDate}に追加しました` };
