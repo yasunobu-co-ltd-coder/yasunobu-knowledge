@@ -332,65 +332,12 @@ export default function TeamChatPage() {
         {messages.length === 0 && (
           <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "40px 0" }}>メッセージがありません</div>
         )}
-        {messages.map((msg) => {
-          const isMe = msg.user_id === user?.id;
-          const time = new Date(msg.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-          const readCount = getReadCount(msg);
-          const replyTarget = getReplyTarget(msg);
-          const attType = msg.attachment_type ? TYPE_LABELS[msg.attachment_type] : null;
-
-          return (
-            <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
-              {!isMe && (
-                <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600, marginBottom: 2, paddingLeft: 4 }}>{msg.user_name}</span>
-              )}
-
-              {/* リプライ表示 */}
-              {replyTarget && (
-                <div style={{
-                  maxWidth: "80%", padding: "4px 10px", marginBottom: 2,
-                  borderLeft: "3px solid #94a3b8", borderRadius: 6,
-                  background: "#f8fafc", fontSize: 11, color: "#64748b",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>
-                  <span style={{ fontWeight: 600 }}>{replyTarget.user_name}</span>: {replyTarget.content.slice(0, 50)}
-                </div>
-              )}
-
-              {/* 添付カード */}
-              {attType && (
-                <div style={{
-                  maxWidth: "80%", padding: "6px 10px", marginBottom: 2, borderRadius: 8,
-                  background: attType.bg, border: `1px solid ${attType.color}20`,
-                  fontSize: 11, color: attType.color, fontWeight: 600,
-                }}>
-                  {attType.label}を参照
-                </div>
-              )}
-
-              {/* メッセージ本体 */}
-              <div
-                onClick={() => !isMe ? setReplyTo(msg) : undefined}
-                onContextMenu={(e) => { e.preventDefault(); setReplyTo(msg); }}
-                style={{
-                  maxWidth: "85%", padding: "8px 12px",
-                  borderRadius: isMe ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-                  background: isMe ? "#15803d" : "#f1f5f9",
-                  color: isMe ? "#fff" : "#1e293b",
-                  fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
-                  cursor: "pointer",
-                }}>
-                {msg.content}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
-                <span style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{time}</span>
-                {isMe && readCount !== null && readCount > 0 && (
-                  <span style={{ fontSize: 10, color: "#15803d", marginTop: 2 }}>既読 {readCount}</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {messages.map((msg) => (
+          <SwipeableMessage key={msg.id} msg={msg} isMe={msg.user_id === user?.id}
+            readCount={getReadCount(msg)} replyTarget={getReplyTarget(msg)}
+            attType={msg.attachment_type ? TYPE_LABELS[msg.attachment_type] : null}
+            onReply={() => setReplyTo(msg)} />
+        ))}
         <div ref={bottomRef} />
       </div>
 
@@ -508,3 +455,116 @@ const actionBtnStyle: React.CSSProperties = {
   padding: "8px 14px", borderRadius: 8, border: "none",
   background: "#15803d", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
 };
+
+const SWIPE_THRESHOLD = 60;
+
+function SwipeableMessage({ msg, isMe, readCount, replyTarget, attType, onReply }: {
+  msg: TeamMessage; isMe: boolean; readCount: number | null;
+  replyTarget: TeamMessage | null;
+  attType: { label: string; color: string; bg: string } | null;
+  onReply: () => void;
+}) {
+  const [offsetX, setOffsetX] = useState(0);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const swiping = useRef(false);
+  const triggered = useRef(false);
+
+  const time = new Date(msg.created_at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    swiping.current = false;
+    triggered.current = false;
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    // 縦スクロールの方が大きければスワイプ無視
+    if (!swiping.current && Math.abs(dy) > Math.abs(dx)) return;
+    if (dx > 10) swiping.current = true;
+    if (!swiping.current) return;
+    e.preventDefault();
+    const clamped = Math.min(Math.max(dx, 0), 80);
+    setOffsetX(clamped);
+    if (clamped >= SWIPE_THRESHOLD && !triggered.current) {
+      triggered.current = true;
+      // 振動フィードバック
+      if (navigator.vibrate) navigator.vibrate(20);
+    }
+  };
+
+  const onTouchEnd = () => {
+    if (triggered.current) onReply();
+    setOffsetX(0);
+    swiping.current = false;
+  };
+
+  return (
+    <div style={{ position: "relative", overflow: "hidden" }}>
+      {/* スワイプ中の返信アイコン */}
+      <div style={{
+        position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
+        opacity: Math.min(offsetX / SWIPE_THRESHOLD, 1),
+        fontSize: 18, color: "#15803d", transition: offsetX === 0 ? "opacity 0.2s" : "none",
+        pointerEvents: "none",
+      }}>&#8617;</div>
+
+      <div
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{
+          display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start",
+          transform: `translateX(${offsetX}px)`,
+          transition: offsetX === 0 ? "transform 0.2s ease-out" : "none",
+        }}
+      >
+        {!isMe && (
+          <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600, marginBottom: 2, paddingLeft: 4 }}>{msg.user_name}</span>
+        )}
+
+        {replyTarget && (
+          <div style={{
+            maxWidth: "80%", padding: "4px 10px", marginBottom: 2,
+            borderLeft: "3px solid #94a3b8", borderRadius: 6,
+            background: "#f8fafc", fontSize: 11, color: "#64748b",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            <span style={{ fontWeight: 600 }}>{replyTarget.user_name}</span>: {replyTarget.content.slice(0, 50)}
+          </div>
+        )}
+
+        {attType && (
+          <div style={{
+            maxWidth: "80%", padding: "6px 10px", marginBottom: 2, borderRadius: 8,
+            background: attType.bg, border: `1px solid ${attType.color}20`,
+            fontSize: 11, color: attType.color, fontWeight: 600,
+          }}>
+            {attType.label}を参照
+          </div>
+        )}
+
+        <div
+          onContextMenu={(e) => { e.preventDefault(); onReply(); }}
+          style={{
+            maxWidth: "85%", padding: "8px 12px",
+            borderRadius: isMe ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+            background: isMe ? "#15803d" : "#f1f5f9",
+            color: isMe ? "#fff" : "#1e293b",
+            fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
+          }}>
+          {msg.content}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
+          <span style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{time}</span>
+          {isMe && readCount !== null && readCount > 0 && (
+            <span style={{ fontSize: 10, color: "#15803d", marginTop: 2 }}>既読 {readCount}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
