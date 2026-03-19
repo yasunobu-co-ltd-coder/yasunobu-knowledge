@@ -221,71 +221,78 @@ export default function CalendarPage() {
         })}
       </div>
 
-      {/* 選択日の詳細 */}
+      {/* 選択日のモーダル */}
       {selectedDate && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", margin: 0 }}>
-            {selectedDate.replace(/-/g, "/")} の予定 ({selectedEvents.length}件)
-          </h2>
-          {selectedEvents.length === 0 ? (
-            <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
-              この日の予定はありません
-            </p>
-          ) : (
-            selectedEvents.map((ev) => {
-              const c = TYPE_COLORS[ev.type] || TYPE_COLORS.memo;
-              return (
-                <div
-                  key={ev.id}
-                  onClick={() => handleEventClick(ev)}
-                  style={{
-                    background: "#fff",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 8,
-                    padding: "10px 12px",
-                    opacity: ev.status === "done" || ev.status === "cancelled" ? 0.5 : 1,
-                    cursor: "pointer",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span
+        <div
+          onClick={() => setSelectedDate(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 100,
+            background: "rgba(0,0,0,0.3)",
+            display: "flex", alignItems: "flex-end", justifyContent: "center",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#fff", borderRadius: "16px 16px 0 0",
+              width: "100%", maxWidth: 480, maxHeight: "60dvh",
+              display: "flex", flexDirection: "column",
+              padding: "16px 16px calc(env(safe-area-inset-bottom, 0px) + 16px)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1e293b", margin: 0 }}>
+                {selectedDate.replace(/-/g, "/")} ({WEEKDAYS[new Date(selectedDate).getDay()]})
+              </h2>
+              <button onClick={() => setSelectedDate(null)}
+                style={{ background: "none", border: "none", fontSize: 20, color: "#94a3b8", cursor: "pointer", padding: "0 4px" }}>✕</button>
+            </div>
+            <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+              {selectedEvents.length === 0 ? (
+                <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "24px 0" }}>
+                  この日の予定はありません
+                </p>
+              ) : (
+                selectedEvents.map((ev) => {
+                  const c = TYPE_COLORS[ev.type] || TYPE_COLORS.memo;
+                  return (
+                    <div
+                      key={ev.id}
+                      onClick={() => handleEventClick(ev)}
                       style={{
-                        borderRadius: 4,
-                        padding: "2px 8px",
-                        fontSize: 10,
-                        fontWeight: 600,
-                        background: c.bg,
-                        color: c.text,
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 10,
+                        padding: "10px 12px",
+                        opacity: ev.status === "done" || ev.status === "cancelled" ? 0.5 : 1,
+                        cursor: "pointer",
                       }}
                     >
-                      {c.label}
-                    </span>
-                    {ev.client_name && (
-                      <span
-                        style={{ fontSize: 11, color: "#15803d", fontWeight: 600 }}
-                      >
-                        {ev.client_name}
-                      </span>
-                    )}
-                    {ev.status && (
-                      <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: "auto" }}>
-                        {ev.status}
-                      </span>
-                    )}
-                  </div>
-                  <p style={{ marginTop: 6, fontSize: 13, color: "#334155", lineHeight: 1.6 }}>
-                    {ev.label}
-                  </p>
-                </div>
-              );
-            })
-          )}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{
+                          borderRadius: 4, padding: "2px 8px", fontSize: 10, fontWeight: 600,
+                          background: c.bg, color: c.text,
+                        }}>{c.label}</span>
+                        {ev.client_name && (
+                          <span style={{ fontSize: 11, color: "#15803d", fontWeight: 600 }}>{ev.client_name}</span>
+                        )}
+                        {ev.status && (
+                          <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: "auto" }}>{ev.status}</span>
+                        )}
+                      </div>
+                      <p style={{ marginTop: 6, fontSize: 13, color: "#334155", lineHeight: 1.6 }}>{ev.label}</p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       )}
       {/* 詳細読み込み中 */}
       {loadingDetail && (
         <div style={{
-          position: "fixed", inset: 0, zIndex: 100,
+          position: "fixed", inset: 0, zIndex: 110,
           background: "rgba(0,0,0,0.2)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
