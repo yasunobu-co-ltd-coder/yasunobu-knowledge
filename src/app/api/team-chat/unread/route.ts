@@ -12,45 +12,34 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ count: 0 });
   }
 
-  // 全チャンネル取得
-  const { data: channels } = await supabase
-    .from("team_channels")
-    .select("id");
+  // チャンネル一覧と既読位置を並列取得
+  const [chRes, rsRes] = await Promise.all([
+    supabase.from("team_channels").select("id"),
+    supabase.from("team_read_status").select("channel_id, last_read_at").eq("user_id", userId),
+  ]);
 
+  const channels = chRes.data;
   if (!channels || channels.length === 0) {
     return NextResponse.json({ count: 0 });
   }
 
-  // ユーザーの既読位置取得
-  const { data: readStatuses } = await supabase
-    .from("team_read_status")
-    .select("channel_id, last_read_at")
-    .eq("user_id", userId);
-
   const readMap = new Map<string, string>();
-  if (readStatuses) {
-    for (const rs of readStatuses) {
-      readMap.set(rs.channel_id, rs.last_read_at);
-    }
-  }
+  rsRes.data?.forEach((rs) => readMap.set(rs.channel_id, rs.last_read_at));
 
-  // 各チャンネルの未読数を合算
-  let totalUnread = 0;
-  for (const ch of channels) {
-    const lastRead = readMap.get(ch.id);
-    let query = supabase
-      .from("team_messages")
-      .select("id", { count: "exact", head: true })
-      .eq("channel_id", ch.id)
-      .neq("user_id", userId); // 自分のメッセージは除外
+  // 全チャンネルの未読数を並列カウント
+  const counts = await Promise.all(
+    channels.map((ch) => {
+      const lastRead = readMap.get(ch.id);
+      let query = supabase!
+        .from("team_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("channel_id", ch.id)
+        .neq("user_id", userId);
+      if (lastRead) query = query.gt("created_at", lastRead);
+      return query;
+    })
+  );
 
-    if (lastRead) {
-      query = query.gt("created_at", lastRead);
-    }
-
-    const { count } = await query;
-    totalUnread += count || 0;
-  }
-
+  const totalUnread = counts.reduce((sum, r) => sum + (r.count || 0), 0);
   return NextResponse.json({ count: totalUnread });
 }

@@ -13,55 +13,27 @@ export async function GET(req: NextRequest) {
   if (!isSupabaseConfigured || !supabase) return NextResponse.json([]);
 
   const q = req.nextUrl.searchParams.get("q")?.trim() || "";
+
+  // 4テーブル並列クエリ
+  const memoQ = supabase.from("yasunobu-memo").select("id, body, client_name").order("created_at", { ascending: false }).limit(20);
+  const minQ = supabase.from("pocket-yasunobu").select("id, summary, client_name").order("created_at", { ascending: false }).limit(20);
+  const todoQ = supabase.from("todos").select("id, content, client_name").order("created_at", { ascending: false }).limit(20);
+  const decQ = supabase.from("decisions").select("id, content, client_name").order("created_at", { ascending: false }).limit(20);
+
+  if (q) {
+    memoQ.ilike("body", `%${q}%`);
+    minQ.ilike("summary", `%${q}%`);
+    todoQ.ilike("content", `%${q}%`);
+    decQ.ilike("content", `%${q}%`);
+  }
+
+  const [memoRes, minRes, todoRes, decRes] = await Promise.all([memoQ, minQ, todoQ, decQ]);
+
   const results: AttachmentItem[] = [];
-
-  // メモ（yasunobu-memo）
-  const memoQ = supabase
-    .from("yasunobu-memo")
-    .select("id, body, client_name")
-    .order("created_at", { ascending: false })
-    .limit(20);
-  if (q) memoQ.ilike("body", `%${q}%`);
-  const { data: memos } = await memoQ;
-  memos?.forEach((m) =>
-    results.push({ id: m.id, type: "memo", label: (m.body || "").slice(0, 60), client_name: m.client_name })
-  );
-
-  // 議事録（pocket-yasunobu）
-  const minQ = supabase
-    .from("pocket-yasunobu")
-    .select("id, summary, client_name")
-    .order("created_at", { ascending: false })
-    .limit(20);
-  if (q) minQ.ilike("summary", `%${q}%`);
-  const { data: minutes } = await minQ;
-  minutes?.forEach((m) =>
-    results.push({ id: m.id, type: "minutes", label: (m.summary || "").slice(0, 60), client_name: m.client_name })
-  );
-
-  // TODO
-  const todoQ = supabase
-    .from("todos")
-    .select("id, content, client_name")
-    .order("created_at", { ascending: false })
-    .limit(20);
-  if (q) todoQ.ilike("content", `%${q}%`);
-  const { data: todos } = await todoQ;
-  todos?.forEach((t) =>
-    results.push({ id: t.id, type: "todo", label: (t.content || "").slice(0, 60), client_name: t.client_name })
-  );
-
-  // 決定事項
-  const decQ = supabase
-    .from("decisions")
-    .select("id, content, client_name")
-    .order("created_at", { ascending: false })
-    .limit(20);
-  if (q) decQ.ilike("content", `%${q}%`);
-  const { data: decisions } = await decQ;
-  decisions?.forEach((d) =>
-    results.push({ id: d.id, type: "decision", label: (d.content || "").slice(0, 60), client_name: d.client_name })
-  );
+  memoRes.data?.forEach((m) => results.push({ id: m.id, type: "memo", label: (m.body || "").slice(0, 60), client_name: m.client_name }));
+  minRes.data?.forEach((m) => results.push({ id: m.id, type: "minutes", label: (m.summary || "").slice(0, 60), client_name: m.client_name }));
+  todoRes.data?.forEach((t) => results.push({ id: t.id, type: "todo", label: (t.content || "").slice(0, 60), client_name: t.client_name }));
+  decRes.data?.forEach((d) => results.push({ id: d.id, type: "decision", label: (d.content || "").slice(0, 60), client_name: d.client_name }));
 
   return NextResponse.json(results);
 }

@@ -1,23 +1,16 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useMemo, useState } from "react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/swr";
 import type { Client } from "@/types/database";
 
 export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: clients, isLoading } = useSWR<Client[]>("/api/clients", fetcher, { dedupingInterval: 30000 });
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      const res = await fetch("/api/clients");
-      const data = await res.json();
-      setClients(Array.isArray(data) ? data : []);
-      setLoading(false);
-    })();
-  }, []);
-
   const filtered = useMemo(() => {
+    if (!clients) return [];
     if (!search.trim()) return clients;
     const q = search.trim().toLowerCase();
     return clients.filter(
@@ -46,13 +39,13 @@ export default function ClientsPage() {
         }}
       />
 
-      {loading ? (
+      {isLoading ? (
         <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
           読み込み中...
         </p>
       ) : filtered.length === 0 ? (
         <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
-          {clients.length === 0 ? "顧客データがありません" : "該当する顧客がありません"}
+          {!clients || clients.length === 0 ? "顧客データがありません" : "該当する顧客がありません"}
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

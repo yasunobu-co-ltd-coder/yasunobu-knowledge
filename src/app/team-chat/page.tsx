@@ -93,6 +93,24 @@ export default function TeamChatPage() {
     });
   }, [user]);
 
+  const loadChannelData = useCallback(async (channelId: string) => {
+    // messages, readStatuses, members, markAsRead を全て並列実行
+    const [msgRes, readRes, memRes] = await Promise.all([
+      fetch(`/api/team-chat/messages?channel_id=${channelId}&limit=100`).then((r) => r.json()).catch(() => []),
+      fetch(`/api/team-chat/readers?channel_id=${channelId}`).then((r) => r.json()).catch(() => []),
+      fetch(`/api/team-chat/channels/${channelId}/members`).then((r) => r.json()).catch(() => []),
+    ]);
+    if (Array.isArray(msgRes)) setMessages(msgRes);
+    if (Array.isArray(readRes)) setReadStatuses(readRes);
+    if (Array.isArray(memRes)) setChannelMembers(memRes.map((m: { user_id: string }) => m.user_id));
+    markAsRead(channelId);
+  }, [markAsRead]);
+
+  useEffect(() => {
+    if (activeChannelId) loadChannelData(activeChannelId);
+  }, [activeChannelId, loadChannelData]);
+
+  // Realtime
   const loadReadStatuses = useCallback(async (channelId: string) => {
     try {
       const res = await fetch(`/api/team-chat/readers?channel_id=${channelId}`);
@@ -101,32 +119,6 @@ export default function TeamChatPage() {
     } catch { /* ignore */ }
   }, []);
 
-  const loadMessages = useCallback(async (channelId: string) => {
-    try {
-      const res = await fetch(`/api/team-chat/messages?channel_id=${channelId}&limit=100`);
-      const data = await res.json();
-      if (Array.isArray(data)) setMessages(data);
-      markAsRead(channelId);
-      loadReadStatuses(channelId);
-    } catch { /* ignore */ }
-  }, [markAsRead, loadReadStatuses]);
-
-  const loadChannelMembers = useCallback(async (channelId: string) => {
-    try {
-      const res = await fetch(`/api/team-chat/channels/${channelId}/members`);
-      const data = await res.json();
-      if (Array.isArray(data)) setChannelMembers(data.map((m: { user_id: string }) => m.user_id));
-    } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => {
-    if (activeChannelId) {
-      loadMessages(activeChannelId);
-      loadChannelMembers(activeChannelId);
-    }
-  }, [activeChannelId, loadMessages, loadChannelMembers]);
-
-  // Realtime
   useEffect(() => {
     if (!activeChannelId || !supabase) return;
     const channel = supabase
@@ -135,13 +127,18 @@ export default function TeamChatPage() {
         (payload) => {
           const newMsg = payload.new as TeamMessage;
           setMessages((prev) => prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg]);
-          markAsRead(activeChannelId);
-          setTimeout(() => loadReadStatuses(activeChannelId), 1000);
+          // markAsRead + readStatuses を並列実行（即時）
+          Promise.all([
+            markAsRead(activeChannelId),
+            fetch(`/api/team-chat/readers?channel_id=${activeChannelId}`).then((r) => r.json()).then((data) => {
+              if (Array.isArray(data)) setReadStatuses(data);
+            }),
+          ]);
         }
       )
       .subscribe();
     return () => { supabase!.removeChannel(channel); };
-  }, [activeChannelId, markAsRead, loadReadStatuses]);
+  }, [activeChannelId, markAsRead]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -303,7 +300,7 @@ export default function TeamChatPage() {
       {activeChannel && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0 8px", flexShrink: 0 }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{activeChannel.name}</span>
-          <button onClick={() => { setShowMembers(!showMembers); if (!showMembers) loadChannelMembers(activeChannelId!); }}
+          <button onClick={() => { setShowMembers(!showMembers); if (!showMembers) loadChannelData(activeChannelId!); }}
             style={{ fontSize: 11, color: "#64748b", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 12, padding: "2px 10px", cursor: "pointer" }}
           >{showMembers ? "閉じる" : `メンバー(${channelMembers.length})`}</button>
         </div>
