@@ -98,14 +98,28 @@ export async function getClients() {
   return merged;
 }
 
-/** 正規化名に一致するDB上の全名前バリアントを取得 */
+/** 正規化名に一致するDB上の全名前バリアントを取得（clients + ソーステーブルから横断検索） */
 async function getClientVariants(normalizedName: string): Promise<string[]> {
   if (!isSupabaseConfigured || !supabase) return [normalizedName];
-  const { data } = await supabase.from("clients").select("name");
-  if (!data) return [normalizedName];
-  return data
-    .map((c: { name: string }) => c.name)
-    .filter((n: string) => normalizeClientName(n) === normalizedName);
+
+  // clients, yasunobu-memo, pocket-yasunobu, todos, decisionsから全client_nameを収集
+  const [c1, c2, c3, c4, c5] = await Promise.all([
+    supabase.from("clients").select("name"),
+    supabase.from("yasunobu-memo").select("client_name"),
+    supabase.from("pocket-yasunobu").select("client_name"),
+    supabase.from("todos").select("client_name"),
+    supabase.from("decisions").select("client_name"),
+  ]);
+
+  const allNames = new Set<string>();
+  c1.data?.forEach((r) => { if (r.name) allNames.add(r.name); });
+  c2.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
+  c3.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
+  c4.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
+  c5.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
+
+  const variants = [...allNames].filter((n) => normalizeClientName(n) === normalizedName);
+  return variants.length > 0 ? variants : [normalizedName];
 }
 
 /** 顧客カルテ取得（顧客情報 + タイムライン + TODO + 決定事項） */
@@ -146,9 +160,13 @@ export async function getClientProfile(clientName: string) {
   const activeTodos = todoResults.flat();
   const activeDecisions = decisionResults.flat();
 
+  // 正規化名以外のバリアントを「別名」として表示用に返す
+  const variantAliases = variants.filter((v) => v !== clientName);
+
   return {
     client: clientRes.data as Client,
     aliases: (aliases.data ?? []) as ClientAlias[],
+    variants: variantAliases,
     timeline,
     activeTodos,
     activeDecisions,

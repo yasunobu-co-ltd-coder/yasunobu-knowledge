@@ -124,6 +124,7 @@ export type KnowledgeTimelineEntry = {
 export type ClientProfile = {
   client: Client;
   aliases: ClientAlias[];
+  variants: string[];
   timeline: KnowledgeTimelineEntry[];
   activeTodos: Todo[];
   activeDecisions: Decision[];

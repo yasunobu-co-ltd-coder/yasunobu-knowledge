@@ -85,18 +85,32 @@ export default function ClientDetailPage() {
             {profile.client.notes}
           </p>
         )}
-        {profile.aliases.length > 0 && (
+        {(profile.aliases.length > 0 || (profile.variants && profile.variants.length > 0)) && (
           <div style={{ marginTop: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, color: "#16a34a" }}>別名:</span>
-            {profile.aliases.map((a) => (
+            <span style={{ fontSize: 11, color: "#16a34a" }}>統合:</span>
+            {profile.variants?.map((v) => (
               <span
-                key={a.id}
+                key={v}
                 style={{
                   background: "#dcfce7",
                   borderRadius: 4,
                   padding: "1px 8px",
                   fontSize: 11,
                   color: "#15803d",
+                }}
+              >
+                {v}
+              </span>
+            ))}
+            {profile.aliases.map((a) => (
+              <span
+                key={a.id}
+                style={{
+                  background: "#dbeafe",
+                  borderRadius: 4,
+                  padding: "1px 8px",
+                  fontSize: 11,
+                  color: "#1d4ed8",
                 }}
               >
                 {a.alias}
