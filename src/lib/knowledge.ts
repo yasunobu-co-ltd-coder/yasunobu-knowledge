@@ -60,49 +60,10 @@ export async function getTimeline(options?: {
 // 顧客（clients）
 // ===================================================
 
-/** 顧客一覧取得（名前を正規化して統合） */
-export async function getClients() {
-  if (!isSupabaseConfigured || !supabase) return [];
+/** 全テーブルからclient_nameを横断収集（正規化名→バリアント名のMap） */
+async function collectAllClientNames(): Promise<Map<string, Set<string>>> {
+  if (!isSupabaseConfigured || !supabase) return new Map();
 
-  const { data, error } = await supabase
-    .from("clients")
-    .select("*")
-    .order("name");
-  if (error) throw error;
-
-  const raw = data as Client[];
-  // 正規化名でグルーピング
-  const groups = new Map<string, Client[]>();
-  for (const c of raw) {
-    const key = normalizeClientName(c.name);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(c);
-  }
-
-  // グループごとに代表を返す（最古のcreated_at、notesは結合）
-  const merged: Client[] = [];
-  for (const [normName, members] of groups) {
-    members.sort((a, b) => a.created_at.localeCompare(b.created_at));
-    const representative = { ...members[0] };
-    representative.name = normName;
-    // notesが複数あれば統合
-    const allNotes = members
-      .map((m) => m.notes)
-      .filter(Boolean)
-      .join("\n");
-    if (allNotes) representative.notes = allNotes;
-    merged.push(representative);
-  }
-
-  merged.sort((a, b) => a.name.localeCompare(b.name, "ja"));
-  return merged;
-}
-
-/** 正規化名に一致するDB上の全名前バリアントを取得（clients + ソーステーブルから横断検索） */
-async function getClientVariants(normalizedName: string): Promise<string[]> {
-  if (!isSupabaseConfigured || !supabase) return [normalizedName];
-
-  // clients, yasunobu-memo, pocket-yasunobu, todos, decisionsから全client_nameを収集
   const [c1, c2, c3, c4, c5] = await Promise.all([
     supabase.from("clients").select("name"),
     supabase.from("yasunobu-memo").select("client_name"),
@@ -118,8 +79,69 @@ async function getClientVariants(normalizedName: string): Promise<string[]> {
   c4.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
   c5.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
 
-  const variants = [...allNames].filter((n) => normalizeClientName(n) === normalizedName);
-  return variants.length > 0 ? variants : [normalizedName];
+  const groups = new Map<string, Set<string>>();
+  for (const n of allNames) {
+    const key = normalizeClientName(n);
+    if (!groups.has(key)) groups.set(key, new Set());
+    groups.get(key)!.add(n);
+  }
+  return groups;
+}
+
+/** 顧客一覧取得（全テーブル横断で名前を正規化して統合） */
+export async function getClients() {
+  if (!isSupabaseConfigured || !supabase) return [];
+
+  const [clientsRes, allGroups] = await Promise.all([
+    supabase.from("clients").select("*").order("name"),
+    collectAllClientNames(),
+  ]);
+  if (clientsRes.error) throw clientsRes.error;
+
+  const raw = clientsRes.data as Client[];
+
+  // clientsテーブルのレコードを正規化名でグルーピング
+  const clientGroups = new Map<string, Client[]>();
+  for (const c of raw) {
+    const key = normalizeClientName(c.name);
+    if (!clientGroups.has(key)) clientGroups.set(key, []);
+    clientGroups.get(key)!.push(c);
+  }
+
+  // 横断収集で見つかったがclientsテーブルにない正規化名も追加
+  for (const normName of allGroups.keys()) {
+    if (!clientGroups.has(normName)) {
+      // clientsテーブルに無い場合、仮のClientレコードを作成
+      clientGroups.set(normName, [{
+        id: `virtual-${normName}`,
+        name: normName,
+        notes: null,
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }]);
+    }
+  }
+
+  const merged: Client[] = [];
+  for (const [normName, members] of clientGroups) {
+    members.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const representative = { ...members[0] };
+    representative.name = normName;
+    const allNotes = members.map((m) => m.notes).filter(Boolean).join("\n");
+    if (allNotes) representative.notes = allNotes;
+    merged.push(representative);
+  }
+
+  merged.sort((a, b) => a.name.localeCompare(b.name, "ja"));
+  return merged;
+}
+
+/** 正規化名に一致するDB上の全名前バリアントを取得 */
+async function getClientVariants(normalizedName: string): Promise<string[]> {
+  const groups = await collectAllClientNames();
+  const variants = groups.get(normalizedName);
+  return variants ? [...variants] : [normalizedName];
 }
 
 /** 顧客カルテ取得（顧客情報 + タイムライン + TODO + 決定事項） */
