@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     supabase.from("yasunobu-memo").select("id, due_date, memo, client_name, status").not("due_date", "is", null).gte("due_date", startDate).lt("due_date", endDate),
     supabase.from("todos").select("id, due_date, content, client_name, status").not("due_date", "is", null).gte("due_date", startDate).lt("due_date", endDate),
     supabase.from("decisions").select("id, created_at, content, client_name, status").gte("created_at", startDate).lt("created_at", endDate),
-    supabase.from("pocket-yasunobu").select("id, next_schedule, client_name, summary").not("next_schedule", "is", null),
+    supabase.from("pocket-yasunobu").select("id, next_schedule, client_name, summary").not("next_schedule", "is", null).gte("next_schedule", startDate).lt("next_schedule", endDate),
   ]);
 
   const events: CalendarEvent[] = [];
@@ -58,5 +58,7 @@ export async function GET(req: NextRequest) {
     }
   });
 
-  return NextResponse.json(events);
+  return NextResponse.json(events, {
+    headers: { "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30" },
+  });
 }

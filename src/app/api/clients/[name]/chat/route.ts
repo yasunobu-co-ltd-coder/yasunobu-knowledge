@@ -336,9 +336,11 @@ export async function POST(
       );
     }
 
-    // ユーザーメッセージをDB保存
-    await saveMessage(thread_id, "user", message);
-    await autoTitle(thread_id, message);
+    // ユーザーメッセージをDB保存（並列）
+    await Promise.all([
+      saveMessage(thread_id, "user", message),
+      autoTitle(thread_id, message),
+    ]);
 
     // 過去の会話履歴をDBから取得（最新20件）
     let history: { role: "user" | "assistant"; content: string }[] = [];

@@ -18,6 +18,7 @@ import type {
 /** 横断タイムライン取得 */
 export async function getTimeline(options?: {
   client_name?: string;
+  client_names?: string[];
   source_type?: "memo" | "minutes";
   search?: string;
   limit?: number;
@@ -30,7 +31,9 @@ export async function getTimeline(options?: {
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (options?.client_name) {
+  if (options?.client_names && options.client_names.length > 0) {
+    query = query.in("client_name", options.client_names);
+  } else if (options?.client_name) {
     query = query.eq("client_name", options.client_name);
   }
   if (options?.source_type) {
@@ -57,12 +60,20 @@ export async function getTimeline(options?: {
 }
 
 // ===================================================
-// 顧客（clients）
+// 顧客（clients） — キャッシュ付き横断名寄せ
 // ===================================================
 
-/** 全テーブルからclient_nameを横断収集（正規化名→バリアント名のMap） */
+let _clientNameCache: { groups: Map<string, Set<string>>; ts: number } | null = null;
+const CACHE_TTL = 30_000; // 30秒キャッシュ
+
+/** 全テーブルからclient_nameを横断収集（正規化名→バリアント名のMap）— キャッシュ付き */
 async function collectAllClientNames(): Promise<Map<string, Set<string>>> {
   if (!isSupabaseConfigured || !supabase) return new Map();
+
+  // キャッシュヒット
+  if (_clientNameCache && Date.now() - _clientNameCache.ts < CACHE_TTL) {
+    return _clientNameCache.groups;
+  }
 
   const [c1, c2, c3, c4, c5] = await Promise.all([
     supabase.from("clients").select("name"),
@@ -85,6 +96,8 @@ async function collectAllClientNames(): Promise<Map<string, Set<string>>> {
     if (!groups.has(key)) groups.set(key, new Set());
     groups.get(key)!.add(n);
   }
+
+  _clientNameCache = { groups, ts: Date.now() };
   return groups;
 }
 
@@ -100,7 +113,6 @@ export async function getClients() {
 
   const raw = clientsRes.data as Client[];
 
-  // clientsテーブルのレコードを正規化名でグルーピング
   const clientGroups = new Map<string, Client[]>();
   for (const c of raw) {
     const key = normalizeClientName(c.name);
@@ -108,10 +120,8 @@ export async function getClients() {
     clientGroups.get(key)!.push(c);
   }
 
-  // 横断収集で見つかったがclientsテーブルにない正規化名も追加
   for (const normName of allGroups.keys()) {
     if (!clientGroups.has(normName)) {
-      // clientsテーブルに無い場合、仮のClientレコードを作成
       clientGroups.set(normName, [{
         id: `virtual-${normName}`,
         name: normName,
@@ -144,7 +154,7 @@ async function getClientVariants(normalizedName: string): Promise<string[]> {
   return variants ? [...variants] : [normalizedName];
 }
 
-/** 顧客カルテ取得（顧客情報 + タイムライン + TODO + 決定事項） */
+/** 顧客カルテ取得 — 全クエリを並列化 */
 export async function getClientProfile(clientName: string) {
   if (!isSupabaseConfigured || !supabase) {
     return {
@@ -156,42 +166,34 @@ export async function getClientProfile(clientName: string) {
     };
   }
 
-  // 正規化名に一致する全バリアントを取得
+  // バリアント取得
   const variants = await getClientVariants(clientName);
 
-  // 代表クライアント（最初にヒットしたもの）
-  const clientRes = await supabase
-    .from("clients")
-    .select("*")
-    .in("name", variants)
-    .order("created_at")
-    .limit(1)
-    .single();
-
-  const clientId = clientRes.data?.id ?? "";
-
-  // 全バリアント名でタイムライン・TODO・決定事項を取得
-  const [aliases, timelineResults, todoResults, decisionResults] = await Promise.all([
-    supabase.from("client_aliases").select("*").eq("client_id", clientId),
-    Promise.all(variants.map((v) => getTimeline({ client_name: v }))),
-    Promise.all(variants.map((v) => getTodos({ client_name: v, status: "open" }))),
-    Promise.all(variants.map((v) => getDecisions({ client_name: v, status: "active" }))),
+  // 全クエリを一括並列実行（バリアントごとにクエリ分けず .in() で一発）
+  const [clientRes, aliasClients, timelineData, todoData, decisionData] = await Promise.all([
+    supabase.from("clients").select("*").in("name", variants).order("created_at").limit(1).single(),
+    supabase.from("clients").select("id").in("name", variants),
+    getTimeline({ client_names: variants }),
+    getTodos({ client_names: variants, status: "open" }),
+    getDecisions({ client_names: variants, status: "active" }),
   ]);
 
-  const timeline = timelineResults.flat().sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const activeTodos = todoResults.flat();
-  const activeDecisions = decisionResults.flat();
+  const clientIds = (aliasClients.data ?? []).map((c: { id: string }) => c.id);
+  let aliases: ClientAlias[] = [];
+  if (clientIds.length > 0) {
+    const { data } = await supabase.from("client_aliases").select("*").in("client_id", clientIds);
+    aliases = (data ?? []) as ClientAlias[];
+  }
 
-  // 正規化名以外のバリアントを「別名」として表示用に返す
   const variantAliases = variants.filter((v) => v !== clientName);
 
   return {
     client: clientRes.data as Client,
-    aliases: (aliases.data ?? []) as ClientAlias[],
+    aliases,
     variants: variantAliases,
-    timeline,
-    activeTodos,
-    activeDecisions,
+    timeline: timelineData,
+    activeTodos: todoData,
+    activeDecisions: decisionData,
   };
 }
 
@@ -200,7 +202,7 @@ export async function getClientProfile(clientName: string) {
 // ===================================================
 
 /** TODO一覧取得 */
-export async function getTodos(filter?: TodoFilter) {
+export async function getTodos(filter?: TodoFilter & { client_names?: string[] }) {
   if (!isSupabaseConfigured || !supabase) return [];
 
   let query = supabase
@@ -214,7 +216,9 @@ export async function getTodos(filter?: TodoFilter) {
   } else {
     query = query.not("status", "in", '("done","cancelled")');
   }
-  if (filter?.client_name) {
+  if (filter?.client_names && filter.client_names.length > 0) {
+    query = query.in("client_name", filter.client_names);
+  } else if (filter?.client_name) {
     query = query.eq("client_name", filter.client_name);
   }
   if (filter?.assignee) {
@@ -238,24 +242,14 @@ export async function updateTodoStatus(
   if (!isSupabaseConfigured || !supabase)
     throw new Error("Supabase not configured");
 
-  // 変更前を取得
-  const { data: before } = await supabase
-    .from("todos")
-    .select("status, client_name")
-    .eq("id", id)
-    .single();
+  const [{ data: before }, updateRes] = await Promise.all([
+    supabase.from("todos").select("status, client_name").eq("id", id).single(),
+    supabase.from("todos").update({ status }).eq("id", id).select().single(),
+  ]);
+  if (updateRes.error) throw updateRes.error;
 
-  const { data, error } = await supabase
-    .from("todos")
-    .update({ status })
-    .eq("id", id)
-    .select()
-    .single();
-  if (error) throw error;
-
-  // 変更ログ記録
   if (before && before.status !== status) {
-    await recordChangeLog({
+    recordChangeLog({
       client_name: before.client_name,
       source_type: "todo",
       source_id: id,
@@ -268,7 +262,7 @@ export async function updateTodoStatus(
     });
   }
 
-  return data as Todo;
+  return updateRes.data as Todo;
 }
 
 /** TODO 新規作成 */
@@ -296,7 +290,7 @@ export async function createTodo(
 // ===================================================
 
 /** 決定事項一覧取得 */
-export async function getDecisions(filter?: DecisionFilter) {
+export async function getDecisions(filter?: DecisionFilter & { client_names?: string[] }) {
   if (!isSupabaseConfigured || !supabase) return [];
 
   let query = supabase
@@ -310,7 +304,9 @@ export async function getDecisions(filter?: DecisionFilter) {
   } else {
     query = query.eq("status", "active");
   }
-  if (filter?.client_name) {
+  if (filter?.client_names && filter.client_names.length > 0) {
+    query = query.in("client_name", filter.client_names);
+  } else if (filter?.client_name) {
     query = query.eq("client_name", filter.client_name);
   }
   if (filter?.source_type) {
@@ -331,24 +327,14 @@ export async function updateDecisionStatus(
   if (!isSupabaseConfigured || !supabase)
     throw new Error("Supabase not configured");
 
-  // 変更前を取得
-  const { data: before } = await supabase
-    .from("decisions")
-    .select("status, client_name")
-    .eq("id", id)
-    .single();
+  const [{ data: before }, updateRes] = await Promise.all([
+    supabase.from("decisions").select("status, client_name").eq("id", id).single(),
+    supabase.from("decisions").update({ status }).eq("id", id).select().single(),
+  ]);
+  if (updateRes.error) throw updateRes.error;
 
-  const { data, error } = await supabase
-    .from("decisions")
-    .update({ status })
-    .eq("id", id)
-    .select()
-    .single();
-  if (error) throw error;
-
-  // 変更ログ記録
   if (before && before.status !== status) {
-    await recordChangeLog({
+    recordChangeLog({
       client_name: before.client_name,
       source_type: "decision",
       source_id: id,
@@ -361,15 +347,15 @@ export async function updateDecisionStatus(
     });
   }
 
-  return data as Decision;
+  return updateRes.data as Decision;
 }
 
 // ===================================================
 // 変更ログ
 // ===================================================
 
-/** 変更ログを記録 */
-export async function recordChangeLog(log: {
+/** 変更ログを記録（fire-and-forget） */
+export function recordChangeLog(log: {
   client_name?: string | null;
   source_type: string;
   source_id: string;
@@ -381,7 +367,7 @@ export async function recordChangeLog(log: {
   created_by?: string | null;
 }) {
   if (!isSupabaseConfigured || !supabase) return;
-  await supabase.from("change_logs").insert(log);
+  supabase.from("change_logs").insert(log);
 }
 
 /** 顧客の変更ログ取得 */

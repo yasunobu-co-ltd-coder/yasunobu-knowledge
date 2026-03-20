@@ -6,7 +6,7 @@ import { fetcher } from "@/lib/swr";
 import type { Client } from "@/types/database";
 
 export default function ClientsPage() {
-  const { data: clients, isLoading } = useSWR<Client[]>("/api/clients", fetcher, { dedupingInterval: 30000 });
+  const { data: clients, isLoading } = useSWR<Client[]>("/api/clients", fetcher, { dedupingInterval: 15000, revalidateOnFocus: true });
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
