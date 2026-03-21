@@ -66,7 +66,7 @@ export async function getTimeline(options?: {
 let _clientNameCache: { groups: Map<string, Set<string>>; ts: number } | null = null;
 const CACHE_TTL = 30_000; // 30秒キャッシュ
 
-/** 全テーブルからclient_nameを横断収集（正規化名→バリアント名のMap）— キャッシュ付き */
+/** データテーブルから実データがあるclient_nameのみ横断収集（正規化名→バリアント名のMap）— キャッシュ付き */
 async function collectAllClientNames(): Promise<Map<string, Set<string>>> {
   if (!isSupabaseConfigured || !supabase) return new Map();
 
@@ -75,8 +75,8 @@ async function collectAllClientNames(): Promise<Map<string, Set<string>>> {
     return _clientNameCache.groups;
   }
 
-  const [c1, c2, c3, c4, c5] = await Promise.all([
-    supabase.from("clients").select("name"),
+  // データテーブルのみから収集（clientsテーブルは除外 — 旧名前がデータなしで残るのを防ぐ）
+  const [c1, c2, c3, c4] = await Promise.all([
     supabase.from("yasunobu-memo").select("client_name"),
     supabase.from("pocket-yasunobu").select("client_name"),
     supabase.from("todos").select("client_name"),
@@ -84,11 +84,10 @@ async function collectAllClientNames(): Promise<Map<string, Set<string>>> {
   ]);
 
   const allNames = new Set<string>();
-  c1.data?.forEach((r) => { if (r.name) allNames.add(r.name); });
+  c1.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
   c2.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
   c3.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
   c4.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
-  c5.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
 
   const groups = new Map<string, Set<string>>();
   for (const n of allNames) {
