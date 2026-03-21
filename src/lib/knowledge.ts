@@ -75,19 +75,16 @@ async function collectAllClientNames(): Promise<Map<string, Set<string>>> {
     return _clientNameCache.groups;
   }
 
-  // データテーブルのみから収集（clientsテーブルは除外 — 旧名前がデータなしで残るのを防ぐ）
-  const [c1, c2, c3, c4] = await Promise.all([
+  // メモ・議事録のみを顧客の存在判定に使用
+  // TODO・決定事項だけ残っている旧名の顧客は表示しない（名前変更時に旧名が残るのを防ぐ）
+  const [c1, c2] = await Promise.all([
     supabase.from("yasunobu-memo").select("client_name"),
     supabase.from("pocket-yasunobu").select("client_name"),
-    supabase.from("todos").select("client_name"),
-    supabase.from("decisions").select("client_name"),
   ]);
 
   const allNames = new Set<string>();
   c1.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
   c2.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
-  c3.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
-  c4.data?.forEach((r) => { if (r.client_name) allNames.add(r.client_name); });
 
   const groups = new Map<string, Set<string>>();
   for (const n of allNames) {
