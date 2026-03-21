@@ -76,8 +76,8 @@ export default function BottomNav() {
         display: "flex",
         justifyContent: "space-around",
         alignItems: "center",
-        padding: "12px 0",
-        paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+        padding: "16px 0",
+        paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
         zIndex: 50,
       }}
     >
