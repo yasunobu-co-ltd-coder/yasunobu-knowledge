@@ -112,13 +112,17 @@ export async function getClients() {
 
   const raw = clientsRes.data as Client[];
 
+  // clientsテーブルのレコードを正規化名でグルーピング（データが存在する名前のみ）
   const clientGroups = new Map<string, Client[]>();
   for (const c of raw) {
     const key = normalizeClientName(c.name);
+    // データテーブルに実データがある正規化名のみ採用
+    if (!allGroups.has(key)) continue;
     if (!clientGroups.has(key)) clientGroups.set(key, []);
     clientGroups.get(key)!.push(c);
   }
 
+  // データテーブルにはあるがclientsテーブルにない正規化名も仮レコードとして追加
   for (const normName of allGroups.keys()) {
     if (!clientGroups.has(normName)) {
       clientGroups.set(normName, [{
