@@ -22,6 +22,12 @@ export async function buildClientContext(clientName: string): Promise<string> {
     .filter((n: string) => normalizeClientName(n) === clientName);
   if (variants.length === 0) variants.push(clientName);
 
+  // ユーザーID→名前マッピング取得
+  const { data: usersData } = await supabase.from("users").select("id, name");
+  const userNameMap = new Map<string, string>();
+  (usersData ?? []).forEach((u: { id: string; name: string }) => userNameMap.set(u.id, u.name));
+  const resolveUser = (id: string | null) => (id ? userNameMap.get(id) || id : null);
+
   // 必要列のみ取得 + .in() で一括（バリアントごとにクエリ分けない）
   const [memoRes, minutesRes, todoRes, decRes] = await Promise.all([
     supabase.from("v_knowledge_timeline")
@@ -56,7 +62,7 @@ export async function buildClientContext(clientName: string): Promise<string> {
         m.urgency && `急ぎ:${m.urgency}`,
         m.profit && `利益度:${m.profit}`,
         m.due_date && `期限:${m.due_date}`,
-        m.assignee && `担当:${m.assignee}`,
+        m.assignee && `担当:${resolveUser(m.assignee)}`,
       ].filter(Boolean).join(" / ");
       sections.push(`### [${date}] ${meta}\n${m.body || ""}`);
     }
@@ -88,7 +94,7 @@ export async function buildClientContext(clientName: string): Promise<string> {
     sections.push("\n## TODO一覧");
     for (const t of todos) {
       const date = new Date(t.created_at).toLocaleDateString("ja-JP");
-      sections.push(`- [${t.status}] (ID:${t.id}) ${t.content}${t.due_date ? ` (期限:${t.due_date})` : ""}${t.assignee ? ` 担当:${t.assignee}` : ""} (${date})`);
+      sections.push(`- [${t.status}] (ID:${t.id}) ${t.content}${t.due_date ? ` (期限:${t.due_date})` : ""}${t.assignee ? ` 担当:${resolveUser(t.assignee)}` : ""} (${date})`);
     }
   }
 
