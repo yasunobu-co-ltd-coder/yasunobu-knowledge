@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useUser, AppUser } from "@/lib/user-context";
+import { Lock, User, GripVertical } from "lucide-react";
 
 const APP_VERSION = "v0.1";
 const COMMIT_SHA = process.env.NEXT_PUBLIC_COMMIT_SHA || "dev";
@@ -185,7 +186,8 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
         {/* PIN入力 */}
         {stage === "pin" && (
           <form onSubmit={handlePinSubmit}>
-            <div style={{ fontSize: 14, color: "#334155", fontWeight: 600, marginBottom: 16 }}>
+            <div style={{ fontSize: 14, color: "#334155", fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+              <Lock style={{ width: 16, height: 16 }} />
               PINコードを入力してください
             </div>
             <input
@@ -280,7 +282,10 @@ export default function LoginGuard({ children }: { children: React.ReactNode }) 
                         transition: "all 0.15s",
                       }}
                     >
-                      {u.name}
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {isDragging ? <GripVertical style={{ width: 16, height: 16, color: "#94a3b8" }} /> : <User style={{ width: 16, height: 16, color: "#64748b" }} />}
+                        {u.name}
+                      </span>
                     </button>
                   </div>
                 ))

@@ -1,6 +1,7 @@
 "use client";
 
 import { useUser } from "@/lib/user-context";
+import { LogOut } from "lucide-react";
 
 export default function HeaderUser() {
   const { user, logout } = useUser();
@@ -13,7 +14,6 @@ export default function HeaderUser() {
       </span>
       <button
         onClick={() => {
-          // PINは維持したまま、ユーザー選択画面に戻る
           logout();
           window.location.href = "/";
         }}
@@ -25,8 +25,12 @@ export default function HeaderUser() {
           borderRadius: 6,
           padding: "3px 8px",
           cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 3,
         }}
       >
+        <LogOut style={{ width: 12, height: 12 }} />
         切替
       </button>
     </div>

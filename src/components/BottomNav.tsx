@@ -3,13 +3,15 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useUser } from "@/lib/user-context";
 import { supabase } from "@/lib/supabase";
+import { Home, List, Users, CalendarDays, MessageCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const NAV_ITEMS = [
-  { href: "/", label: "ホーム", icon: "\u{1F3E0}" },
-  { href: "/timeline", label: "タイムライン", icon: "\u{1F4D1}" },
-  { href: "/clients", label: "顧客", icon: "\u{1F465}" },
-  { href: "/calendar", label: "カレンダー", icon: "\u{1F4C5}" },
-  { href: "/team-chat", label: "チャット", icon: "\u{1F4AC}" },
+const NAV_ITEMS: { href: string; label: string; Icon: LucideIcon }[] = [
+  { href: "/", label: "ホーム", Icon: Home },
+  { href: "/timeline", label: "タイムライン", Icon: List },
+  { href: "/clients", label: "顧客", Icon: Users },
+  { href: "/calendar", label: "カレンダー", Icon: CalendarDays },
+  { href: "/team-chat", label: "チャット", Icon: MessageCircle },
 ];
 
 export default function BottomNav() {
@@ -97,7 +99,7 @@ export default function BottomNav() {
             position: "relative",
           }}
         >
-          <span style={{ fontSize: 20 }}>{item.icon}</span>
+          <item.Icon style={{ width: 22, height: 22 }} />
           <span>{item.label}</span>
           {item.href === "/team-chat" && unreadCount > 0 && (
             <span
@@ -133,7 +135,6 @@ function sendBrowserNotification(msg: { user_name: string; content: string }) {
   if (!enabled) return;
   if (typeof Notification === "undefined") return;
   if (Notification.permission !== "granted") return;
-  // チャットページをアクティブに見ている場合のみスキップ
   if (document.visibilityState === "visible" && window.location.pathname === "/team-chat") return;
 
   new Notification(`${msg.user_name}`, {
