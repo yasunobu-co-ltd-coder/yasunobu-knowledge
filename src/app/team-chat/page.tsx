@@ -268,7 +268,7 @@ export default function TeamChatPage() {
   const activeChannel = channels?.find((c) => c.id === activeChannelId);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0, height: "calc(100dvh - 160px)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 0, height: "calc(100dvh - 200px)" }}>
       {/* チャンネルタブ */}
       <div style={{ display: "flex", gap: 6, padding: "0 0 8px", overflowX: "auto", flexShrink: 0 }}>
         {channels?.map((ch) => (

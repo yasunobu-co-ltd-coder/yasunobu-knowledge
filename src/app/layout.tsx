@@ -69,7 +69,7 @@ export default function RootLayout({
               backdropFilter: "blur(12px)",
               WebkitBackdropFilter: "blur(12px)",
               borderBottom: "1px solid #e2e8f0",
-              padding: "12px 20px",
+              padding: "18px 20px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -102,7 +102,7 @@ export default function RootLayout({
           <main
             style={{
               flex: 1,
-              padding: "16px 20px 100px",
+              padding: "16px 20px 120px",
             }}
           >
             {children}
