@@ -64,6 +64,7 @@ export default function BottomNav() {
 
   return (
     <nav
+      data-bottom-nav
       style={{
         position: "fixed",
         bottom: 0,
@@ -76,8 +77,8 @@ export default function BottomNav() {
         display: "flex",
         justifyContent: "space-around",
         alignItems: "center",
-        padding: "16px 0",
-        paddingBottom: "calc(16px + env(safe-area-inset-bottom))",
+        padding: "8px 0",
+        paddingBottom: "calc(8px + env(safe-area-inset-bottom))",
         zIndex: 50,
       }}
     >
@@ -92,7 +93,7 @@ export default function BottomNav() {
             alignItems: "center",
             gap: 2,
             fontSize: 10,
-            color: "#64748b",
+            color: "#475569",
             padding: "4px 8px",
             position: "relative",
           }}

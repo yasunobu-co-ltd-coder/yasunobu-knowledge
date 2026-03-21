@@ -92,25 +92,7 @@ export default function RootLayout({
                   letterSpacing: "-0.02em",
                 }}
               >
-                yasunobu-knowledge
-              </span>
-              <span
-                style={{
-                  fontSize: 10,
-                  color: "#15803d",
-                  opacity: 0.6,
-                }}
-              >
-                {APP_VERSION}
-              </span>
-              <span
-                style={{
-                  fontSize: 9,
-                  color: "#94a3b8",
-                  opacity: 0.7,
-                }}
-              >
-                ({process.env.NEXT_PUBLIC_COMMIT_SHA ?? "dev"})
+                knowledge
               </span>
             </a>
             <HeaderUser />

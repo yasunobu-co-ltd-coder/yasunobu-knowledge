@@ -24,3 +24,11 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* モバイルのみフッター高く */
+@media (max-width: 600px) {
+  nav[data-bottom-nav] {
+    padding-top: 30px !important;
+    padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important;
+  }
+}

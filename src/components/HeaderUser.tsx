@@ -9,7 +9,7 @@ export default function HeaderUser() {
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+      <span style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>
         {user.name}
       </span>
       <button
@@ -19,7 +19,7 @@ export default function HeaderUser() {
         }}
         style={{
           fontSize: 10,
-          color: "#94a3b8",
+          color: "#64748b",
           background: "none",
           border: "1px solid #e2e8f0",
           borderRadius: 6,
@@ -30,8 +30,7 @@ export default function HeaderUser() {
           gap: 3,
         }}
       >
-        <LogOut style={{ width: 12, height: 12 }} />
-        切替
+        <LogOut style={{ width: 14, height: 14 }} />
       </button>
     </div>
   );

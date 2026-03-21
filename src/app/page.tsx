@@ -6,6 +6,7 @@ import { fetcher } from "@/lib/swr";
 import type { KnowledgeTimelineEntry } from "@/types/database";
 import EntryDetailModal from "@/components/EntryDetailModal";
 import { SkeletonList } from "@/components/Skeleton";
+import { List, Users, CheckSquare, FileText, Bell, BellOff, Search } from "lucide-react";
 
 const NOTIF_KEY = "yasunobu-knowledge-notifications";
 
@@ -21,7 +22,6 @@ export default function Home() {
 
   const toggleNotif = async () => {
     if (!notifEnabled) {
-      // ONにする → 通知権限リクエスト
       if (typeof Notification !== "undefined" && Notification.permission === "default") {
         await Notification.requestPermission();
       }
@@ -51,6 +51,13 @@ export default function Home() {
     Array.isArray(entry.keywords) ? entry.keywords : [];
 
   const list = entries ?? [];
+
+  const quickLinks = [
+    { href: "/timeline", Icon: List, title: "タイムライン", sub: "memo + 議事録" },
+    { href: "/clients", Icon: Users, title: "顧客一覧", sub: "顧客カルテ" },
+    { href: "/todos", Icon: CheckSquare, title: "TODO", sub: "未完了タスク" },
+    { href: "/decisions", Icon: FileText, title: "決定事項", sub: "決定事項追跡" },
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -84,20 +91,19 @@ export default function Home() {
             fontSize: 14,
             fontWeight: 600,
             cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
           }}
         >
+          <Search style={{ width: 16, height: 16 }} />
           検索
         </button>
       </form>
 
       {/* クイックリンク */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        {[
-          { href: "/timeline", icon: "\u{1F4D1}", title: "タイムライン", sub: "memo + 議事録" },
-          { href: "/clients", icon: "\u{1F465}", title: "顧客一覧", sub: "顧客カルテ" },
-          { href: "/todos", icon: "\u2611", title: "TODO", sub: "未完了タスク" },
-          { href: "/decisions", icon: "\u{1F4DD}", title: "決定事項", sub: "決定事項追跡" },
-        ].map((item) => (
+        {quickLinks.map((item) => (
           <a
             key={item.href}
             href={item.href}
@@ -112,11 +118,11 @@ export default function Home() {
               gap: 4,
             }}
           >
-            <span style={{ fontSize: 22 }}>{item.icon}</span>
+            <item.Icon style={{ width: 22, height: 22, color: "#15803d" }} />
             <span style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>
               {item.title}
             </span>
-            <span style={{ fontSize: 11, color: "#94a3b8" }}>{item.sub}</span>
+            <span style={{ fontSize: 11, color: "#64748b" }}>{item.sub}</span>
           </a>
         ))}
       </div>
@@ -133,12 +139,18 @@ export default function Home() {
           justifyContent: "space-between",
         }}
       >
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>
-            チャット通知
-          </div>
-          <div style={{ fontSize: 11, color: "#94a3b8" }}>
-            新着メッセージをブラウザ通知でお知らせ
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {notifEnabled
+            ? <Bell style={{ width: 18, height: 18, color: "#15803d" }} />
+            : <BellOff style={{ width: 18, height: 18, color: "#64748b" }} />
+          }
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>
+              チャット通知
+            </div>
+            <div style={{ fontSize: 11, color: "#64748b" }}>
+              新着メッセージをブラウザ通知でお知らせ
+            </div>
           </div>
         </div>
         <button
@@ -178,7 +190,7 @@ export default function Home() {
         {isLoading ? (
           <SkeletonList count={4} lines={2} />
         ) : list.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, padding: "32px 0" }}>
+          <p style={{ textAlign: "center", color: "#64748b", fontSize: 13, padding: "32px 0" }}>
             データがありません
           </p>
         ) : (
@@ -218,7 +230,7 @@ export default function Home() {
                       {entry.client_name}
                     </a>
                   )}
-                  <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                  <span style={{ fontSize: 11, color: "#64748b" }}>
                     {new Date(entry.created_at).toLocaleDateString("ja-JP")}
                   </span>
                 </div>
