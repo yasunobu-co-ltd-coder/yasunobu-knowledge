@@ -228,16 +228,17 @@ export default function CalendarPage() {
           style={{
             position: "fixed", inset: 0, zIndex: 100,
             background: "rgba(0,0,0,0.3)",
-            display: "flex", alignItems: "flex-end", justifyContent: "center",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16,
           }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#fff", borderRadius: "16px 16px 0 0",
-              width: "100%", maxWidth: 480, maxHeight: "60dvh",
+              background: "#fff", borderRadius: 16,
+              width: "100%", maxWidth: 480, maxHeight: "70dvh",
               display: "flex", flexDirection: "column",
-              padding: "16px 16px calc(env(safe-area-inset-bottom, 0px) + 16px)",
+              padding: 16,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
