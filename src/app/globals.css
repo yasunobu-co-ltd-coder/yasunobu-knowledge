@@ -28,7 +28,7 @@ body {
 /* モバイルのみフッター高く */
 @media (max-width: 600px) {
   nav[data-bottom-nav] {
-    padding-top: 30px !important;
-    padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important;
+    padding-top: 10px !important;
+    padding-bottom: calc(40px + env(safe-area-inset-bottom)) !important;
   }
 }
