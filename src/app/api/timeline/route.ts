@@ -41,7 +41,9 @@ export async function GET(req: NextRequest) {
       offset,
     });
 
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: { "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30" },
+    });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Unknown error";
