@@ -66,20 +66,22 @@ export default function BottomNav() {
     <nav
       style={{
         position: "fixed",
-        bottom: 0,
+        bottom: 8,
         left: "50%",
         transform: "translateX(-50%)",
-        width: "100%",
+        width: "calc(100% - 16px)",
         maxWidth: 600,
         background: "rgba(255,255,255,0.95)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         borderTop: "1px solid #e2e8f0",
+        borderRadius: 16,
+        boxShadow: "0 -2px 12px rgba(0,0,0,0.06)",
         display: "flex",
         justifyContent: "space-around",
         alignItems: "center",
-        padding: "8px 0",
-        paddingBottom: "calc(8px + env(safe-area-inset-bottom))",
+        padding: "10px 0",
+        paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
         zIndex: 50,
       }}
     >
