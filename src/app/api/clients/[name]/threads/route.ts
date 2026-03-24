@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 /** GET: 顧客のスレッド一覧取得 */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ name: string }> }
 ) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured || !supabaseAdmin) {
     return NextResponse.json([]);
   }
 
   const { name } = await params;
   const clientName = decodeURIComponent(name);
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("chat_threads")
     .select("*")
     .eq("client_name", clientName)
@@ -30,7 +30,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ name: string }> }
 ) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured || !supabaseAdmin) {
     return NextResponse.json({ error: "DB not configured" }, { status: 500 });
   }
 
@@ -39,7 +39,7 @@ export async function POST(
   const body = await req.json().catch(() => ({}));
   const title = body.title || "新しいチャット";
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("chat_threads")
     .insert({ client_name: clientName, title })
     .select()

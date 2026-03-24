@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 export type CalendarEvent = {
   id: string;
@@ -12,7 +12,7 @@ export type CalendarEvent = {
 };
 
 export async function GET(req: NextRequest) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured || !supabaseAdmin) {
     return NextResponse.json([]);
   }
 
@@ -28,10 +28,10 @@ export async function GET(req: NextRequest) {
 
   // 4テーブル並列クエリ
   const [memoRes, todoRes, decRes, minRes] = await Promise.all([
-    supabase.from("yasunobu-memo").select("id, due_date, memo, client_name, status").not("due_date", "is", null).gte("due_date", startDate).lt("due_date", endDate),
-    supabase.from("todos").select("id, due_date, content, client_name, status").not("due_date", "is", null).gte("due_date", startDate).lt("due_date", endDate),
-    supabase.from("decisions").select("id, created_at, content, client_name, status").gte("created_at", startDate).lt("created_at", endDate),
-    supabase.from("pocket-yasunobu").select("id, next_schedule, client_name, summary").not("next_schedule", "is", null).gte("next_schedule", startDate).lt("next_schedule", endDate),
+    supabaseAdmin.from("yasunobu-memo").select("id, due_date, memo, client_name, status").not("due_date", "is", null).gte("due_date", startDate).lt("due_date", endDate),
+    supabaseAdmin.from("todos").select("id, due_date, content, client_name, status").not("due_date", "is", null).gte("due_date", startDate).lt("due_date", endDate),
+    supabaseAdmin.from("decisions").select("id, created_at, content, client_name, status").gte("created_at", startDate).lt("created_at", endDate),
+    supabaseAdmin.from("pocket-yasunobu").select("id, next_schedule, client_name, summary").not("next_schedule", "is", null).gte("next_schedule", startDate).lt("next_schedule", endDate),
   ]);
 
   const events: CalendarEvent[] = [];

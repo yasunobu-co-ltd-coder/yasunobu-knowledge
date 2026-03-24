@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 export async function GET() {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured || !supabaseAdmin) {
     return NextResponse.json([]);
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("users")
     .select("id, name, sort_order")
     .order("sort_order", { ascending: true });
@@ -22,7 +22,7 @@ export async function GET() {
 
 /** sort_order一括更新 */
 export async function PATCH(req: NextRequest) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured || !supabaseAdmin) {
     return NextResponse.json({ error: "DB not configured" }, { status: 500 });
   }
 
@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest) {
 
   await Promise.all(
     orders.map((o) =>
-      supabase!.from("users").update({ sort_order: o.sort_order }).eq("id", o.id)
+      supabaseAdmin!.from("users").update({ sort_order: o.sort_order }).eq("id", o.id)
     )
   );
 

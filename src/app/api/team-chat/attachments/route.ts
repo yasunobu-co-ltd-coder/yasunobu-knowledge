@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import { normalizeClientName } from "@/lib/normalize-client";
 
 type AttachmentItem = {
@@ -12,7 +12,7 @@ type AttachmentItem = {
 
 /** GET /api/team-chat/attachments?client_name=顧客名&q=検索語 */
 export async function GET(req: NextRequest) {
-  if (!isSupabaseConfigured || !supabase) return NextResponse.json([]);
+  if (!isSupabaseConfigured || !supabaseAdmin) return NextResponse.json([]);
 
   const clientName = req.nextUrl.searchParams.get("client_name")?.trim() || "";
   const q = req.nextUrl.searchParams.get("q")?.trim() || "";
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   // client_nameが指定された場合、正規化名でバリアントを取得
   let variants: string[] = [];
   if (clientName) {
-    const { data: allClients } = await supabase.from("clients").select("name");
+    const { data: allClients } = await supabaseAdmin.from("clients").select("name");
     variants = (allClients ?? [])
       .map((c: { name: string }) => c.name)
       .filter((n: string) => normalizeClientName(n) === clientName);
@@ -28,10 +28,10 @@ export async function GET(req: NextRequest) {
   }
 
   // 4テーブル並列クエリ
-  const memoQ = supabase.from("yasunobu-memo").select("id, memo, client_name, due_date").order("created_at", { ascending: false }).limit(30);
-  const minQ = supabase.from("pocket-yasunobu").select("id, summary, client_name, created_at").order("created_at", { ascending: false }).limit(30);
-  const todoQ = supabase.from("todos").select("id, content, client_name, due_date").order("created_at", { ascending: false }).limit(30);
-  const decQ = supabase.from("decisions").select("id, content, client_name, created_at").order("created_at", { ascending: false }).limit(30);
+  const memoQ = supabaseAdmin.from("yasunobu-memo").select("id, memo, client_name, due_date").order("created_at", { ascending: false }).limit(30);
+  const minQ = supabaseAdmin.from("pocket-yasunobu").select("id, summary, client_name, created_at").order("created_at", { ascending: false }).limit(30);
+  const todoQ = supabaseAdmin.from("todos").select("id, content, client_name, due_date").order("created_at", { ascending: false }).limit(30);
+  const decQ = supabaseAdmin.from("decisions").select("id, content, client_name, created_at").order("created_at", { ascending: false }).limit(30);
 
   if (variants.length > 0) {
     memoQ.in("client_name", variants);

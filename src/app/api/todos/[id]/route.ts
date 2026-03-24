@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateTodoStatus } from "@/lib/knowledge";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import type { TodoStatus } from "@/types/database";
 
 export async function PATCH(
@@ -33,11 +33,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!isSupabaseConfigured || !supabase) {
+    if (!isSupabaseConfigured || !supabaseAdmin) {
       return NextResponse.json({ error: "DB not configured" }, { status: 500 });
     }
     const { id } = await params;
-    const { error } = await supabase.from("todos").delete().eq("id", id);
+    const { error } = await supabaseAdmin.from("todos").delete().eq("id", id);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {

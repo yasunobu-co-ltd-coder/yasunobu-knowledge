@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { supabase, supabaseAdmin, isSupabaseConfigured } from "./supabase";
 import { normalizeClientName } from "./normalize-client";
 import type {
   KnowledgeTimelineEntry,
@@ -239,12 +239,12 @@ export async function updateTodoStatus(
   status: Todo["status"],
   opts?: { note?: string; thread_id?: string; created_by?: string }
 ) {
-  if (!isSupabaseConfigured || !supabase)
+  if (!isSupabaseConfigured || !supabaseAdmin)
     throw new Error("Supabase not configured");
 
   const [{ data: before }, updateRes] = await Promise.all([
-    supabase.from("todos").select("status, client_name").eq("id", id).single(),
-    supabase.from("todos").update({ status }).eq("id", id).select().single(),
+    supabaseAdmin.from("todos").select("status, client_name").eq("id", id).single(),
+    supabaseAdmin.from("todos").update({ status }).eq("id", id).select().single(),
   ]);
   if (updateRes.error) throw updateRes.error;
 
@@ -273,10 +273,10 @@ export async function createTodo(
   > &
     Partial<Pick<Todo, "assignee" | "due_date" | "sort_order">>
 ) {
-  if (!isSupabaseConfigured || !supabase)
+  if (!isSupabaseConfigured || !supabaseAdmin)
     throw new Error("Supabase not configured");
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("todos")
     .insert(todo)
     .select()
@@ -324,12 +324,12 @@ export async function updateDecisionStatus(
   status: Decision["status"],
   opts?: { note?: string; thread_id?: string; created_by?: string }
 ) {
-  if (!isSupabaseConfigured || !supabase)
+  if (!isSupabaseConfigured || !supabaseAdmin)
     throw new Error("Supabase not configured");
 
   const [{ data: before }, updateRes] = await Promise.all([
-    supabase.from("decisions").select("status, client_name").eq("id", id).single(),
-    supabase.from("decisions").update({ status }).eq("id", id).select().single(),
+    supabaseAdmin.from("decisions").select("status, client_name").eq("id", id).single(),
+    supabaseAdmin.from("decisions").update({ status }).eq("id", id).select().single(),
   ]);
   if (updateRes.error) throw updateRes.error;
 
@@ -366,8 +366,8 @@ export function recordChangeLog(log: {
   thread_id?: string | null;
   created_by?: string | null;
 }) {
-  if (!isSupabaseConfigured || !supabase) return;
-  supabase.from("change_logs").insert(log);
+  if (!isSupabaseConfigured || !supabaseAdmin) return;
+  supabaseAdmin.from("change_logs").insert(log);
 }
 
 /** 顧客の変更ログ取得 */

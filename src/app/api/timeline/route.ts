@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTimeline } from "@/lib/knowledge";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
       | "minutes"
       | undefined;
 
-    if (sourceId && sourceTypeParam && isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
+    if (sourceId && sourceTypeParam && isSupabaseConfigured && supabaseAdmin) {
+      const { data, error } = await supabaseAdmin
         .from("v_knowledge_timeline")
         .select("*")
         .eq("id", sourceId)

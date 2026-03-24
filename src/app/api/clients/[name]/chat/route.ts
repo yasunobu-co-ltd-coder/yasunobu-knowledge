@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import { buildClientContext } from "@/lib/client-context";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import {
   createTodo,
   updateTodoStatus,
@@ -182,8 +182,8 @@ async function executeTool(
       }
 
       case "create_decision": {
-        if (!isSupabaseConfigured || !supabase) throw new Error("DB not configured");
-        const { data, error } = await supabase
+        if (!isSupabaseConfigured || !supabaseAdmin) throw new Error("DB not configured");
+        const { data, error } = await supabaseAdmin
           .from("decisions")
           .insert({
             source_type: "memo",
@@ -218,7 +218,7 @@ async function executeTool(
       }
 
       case "create_memo": {
-        if (!isSupabaseConfigured || !supabase) throw new Error("DB not configured");
+        if (!isSupabaseConfigured || !supabaseAdmin) throw new Error("DB not configured");
         const memoRow: Record<string, unknown> = {
           client_name: clientName,
           memo: args.body as string,
@@ -229,13 +229,13 @@ async function executeTool(
         };
         if (userId) memoRow.created_by = userId;
         if (userId) memoRow.assignee = userId;
-        const { error } = await supabase.from("yasunobu-memo").insert(memoRow);
+        const { error } = await supabaseAdmin.from("yasunobu-memo").insert(memoRow);
         if (error) throw error;
         return { success: true, message: `メモ「${(args.body as string).slice(0, 30)}...」を記録しました` };
       }
 
       case "add_calendar_event": {
-        if (!isSupabaseConfigured || !supabase) throw new Error("DB not configured");
+        if (!isSupabaseConfigured || !supabaseAdmin) throw new Error("DB not configured");
         const eventDate = args.date as string;
         const eventContent = args.content as string;
         const calRow: Record<string, unknown> = {
@@ -249,7 +249,7 @@ async function executeTool(
         };
         if (userId) calRow.created_by = userId;
         if (userId) calRow.assignee = userId;
-        const { error } = await supabase.from("yasunobu-memo").insert(calRow);
+        const { error } = await supabaseAdmin.from("yasunobu-memo").insert(calRow);
         if (error) throw error;
         return { success: true, message: `カレンダーに「${eventContent}」を${eventDate}に追加しました` };
       }
@@ -274,28 +274,28 @@ async function saveMessage(
   role: "user" | "assistant",
   content: string
 ) {
-  if (!isSupabaseConfigured || !supabase) return;
-  await supabase.from("chat_messages").insert({
+  if (!isSupabaseConfigured || !supabaseAdmin) return;
+  await supabaseAdmin.from("chat_messages").insert({
     thread_id: threadId,
     role,
     content,
   });
-  await supabase
+  await supabaseAdmin
     .from("chat_threads")
     .update({ updated_at: new Date().toISOString() })
     .eq("id", threadId);
 }
 
 async function autoTitle(threadId: string, message: string) {
-  if (!isSupabaseConfigured || !supabase) return;
-  const { data } = await supabase
+  if (!isSupabaseConfigured || !supabaseAdmin) return;
+  const { data } = await supabaseAdmin
     .from("chat_threads")
     .select("title")
     .eq("id", threadId)
     .single();
   if (data?.title === "新しいチャット") {
     const title = message.slice(0, 40) + (message.length > 40 ? "..." : "");
-    await supabase
+    await supabaseAdmin
       .from("chat_threads")
       .update({ title })
       .eq("id", threadId);
@@ -344,8 +344,8 @@ export async function POST(
 
     // 過去の会話履歴をDBから取得（最新20件）
     let history: { role: "user" | "assistant"; content: string }[] = [];
-    if (isSupabaseConfigured && supabase) {
-      const { data } = await supabase
+    if (isSupabaseConfigured && supabaseAdmin) {
+      const { data } = await supabaseAdmin
         .from("chat_messages")
         .select("role, content")
         .eq("thread_id", thread_id)

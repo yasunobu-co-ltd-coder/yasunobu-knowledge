@@ -1,5 +1,5 @@
 import webpush from "web-push";
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
@@ -21,10 +21,10 @@ export async function sendPushToChannelMembers(
   senderUserId: string,
   payload: PushPayload
 ) {
-  if (!isSupabaseConfigured || !supabase || !VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+  if (!isSupabaseConfigured || !supabaseAdmin || !VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
 
   // チャンネルメンバー取得（送信者除外）
-  const { data: members } = await supabase
+  const { data: members } = await supabaseAdmin
     .from("team_channel_members")
     .select("user_id")
     .eq("channel_id", channelId)
@@ -35,7 +35,7 @@ export async function sendPushToChannelMembers(
   const memberIds = members.map((m) => m.user_id);
 
   // メンバーのPushサブスクリプション取得
-  const { data: subs } = await supabase
+  const { data: subs } = await supabaseAdmin
     .from("push_subscriptions")
     .select("endpoint, p256dh, auth")
     .in("user_id", memberIds)
@@ -60,7 +60,7 @@ export async function sendPushToChannelMembers(
         // 410/404 = expired subscription
         const status = (err as { statusCode?: number }).statusCode;
         if (status === 410 || status === 404) {
-          await supabase!
+          await supabaseAdmin!
             .from("push_subscriptions")
             .update({ enabled: false })
             .eq("endpoint", sub.endpoint);

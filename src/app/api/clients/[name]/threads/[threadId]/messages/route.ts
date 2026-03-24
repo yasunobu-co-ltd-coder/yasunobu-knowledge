@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 /** GET: スレッドのメッセージ一覧取得 */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ name: string; threadId: string }> }
 ) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured || !supabaseAdmin) {
     return NextResponse.json([]);
   }
 
   const { threadId } = await params;
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("chat_messages")
     .select("*")
     .eq("thread_id", threadId)

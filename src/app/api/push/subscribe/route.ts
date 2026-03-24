@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 /** POST: サブスクリプション登録/更新 */
 export async function POST(req: NextRequest) {
-  if (!isSupabaseConfigured || !supabase)
+  if (!isSupabaseConfigured || !supabaseAdmin)
     return NextResponse.json({ error: "DB not configured" }, { status: 500 });
 
   const { subscription, user_id } = await req.json();
   const { endpoint, keys } = subscription;
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("push_subscriptions")
     .upsert(
       {
@@ -29,15 +29,15 @@ export async function POST(req: NextRequest) {
 
 /** DELETE: サブスクリプション削除 */
 export async function DELETE(req: NextRequest) {
-  if (!isSupabaseConfigured || !supabase)
+  if (!isSupabaseConfigured || !supabaseAdmin)
     return NextResponse.json({ error: "DB not configured" }, { status: 500 });
 
   const { endpoint, user_id } = await req.json();
 
   if (endpoint) {
-    await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+    await supabaseAdmin.from("push_subscriptions").delete().eq("endpoint", endpoint);
   } else if (user_id) {
-    await supabase.from("push_subscriptions").delete().eq("user_id", user_id);
+    await supabaseAdmin.from("push_subscriptions").delete().eq("user_id", user_id);
   }
 
   return NextResponse.json({ ok: true });

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 
 /** GET /api/team-chat/unread?user_id=xxx → 未読メッセージ総数（RPC 1クエリ） */
 export async function GET(req: NextRequest) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured || !supabaseAdmin) {
     return NextResponse.json({ count: 0 });
   }
 
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ count: 0 });
   }
 
-  const { data, error } = await supabase.rpc("get_unread_count", { p_user_id: userId });
+  const { data, error } = await supabaseAdmin.rpc("get_unread_count", { p_user_id: userId });
 
   if (error) {
     console.error("get_unread_count error:", error);

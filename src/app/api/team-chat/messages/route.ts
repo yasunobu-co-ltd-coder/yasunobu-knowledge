@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "@/lib/supabase";
 import { sendPushToChannelMembers } from "@/lib/push";
 
 export async function GET(req: NextRequest) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured || !supabaseAdmin) {
     return NextResponse.json([]);
   }
 
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const limit = Number(req.nextUrl.searchParams.get("limit") || "50");
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("team_messages")
     .select("*")
     .eq("channel_id", channelId)
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured || !supabaseAdmin) {
     return NextResponse.json({ error: "DB not configured" }, { status: 500 });
   }
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     row.attachment_id = attachment_id;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from("team_messages")
     .insert(row)
     .select()
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   }
 
   // チャンネル名取得してPush通知（非同期）
-  supabase
+  supabaseAdmin!
     .from("team_channels")
     .select("name")
     .eq("id", channel_id)
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
 /** DELETE: 送信取り消し（送信者本人のみ） */
 export async function DELETE(req: NextRequest) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isSupabaseConfigured || !supabaseAdmin) {
     return NextResponse.json({ error: "DB not configured" }, { status: 500 });
   }
 
@@ -85,7 +85,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   // 送信者本人か確認
-  const { data: msg } = await supabase
+  const { data: msg } = await supabaseAdmin
     .from("team_messages")
     .select("user_id")
     .eq("id", message_id)
@@ -95,7 +95,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from("team_messages")
     .delete()
     .eq("id", message_id);
