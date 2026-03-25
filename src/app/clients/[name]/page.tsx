@@ -24,7 +24,7 @@ export default function ClientDetailPage() {
   const { data: profile, isLoading, mutate } = useSWR<ClientProfile>(
     apiBase,
     fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 10000 }
+    { revalidateOnFocus: true, dedupingInterval: 5000 }
   );
 
   // ユーザー名解決
@@ -51,7 +51,7 @@ export default function ClientDetailPage() {
         } else {
           await fetch(`/api/todos/${id}`, { method: "DELETE" });
         }
-        mutate();
+        await mutate(undefined, { revalidate: true });
       } finally {
         busyIds.current.delete(id);
       }
