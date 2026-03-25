@@ -16,6 +16,25 @@ const TYPE_COLORS: Record<string, { bg: string; text: string; label: string }> =
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
+/** セル用ラベル: 顧客名ベースで集約。顧客名なしは種別名で表示 */
+function uniqueDayLabels(events: CalendarEvent[]) {
+  const seen = new Set<string>();
+  const result: { text: string; bg: string; color: string; dimmed: boolean }[] = [];
+  for (const ev of events) {
+    const c = TYPE_COLORS[ev.type] || TYPE_COLORS.memo;
+    const key = ev.client_name || `__type_${ev.type}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({
+      text: ev.client_name ? ev.client_name.slice(0, 6) : c.label,
+      bg: c.bg,
+      color: c.text,
+      dimmed: ev.status === "done" || ev.status === "cancelled",
+    });
+  }
+  return result;
+}
+
 export default function CalendarPage() {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -186,29 +205,26 @@ export default function CalendarPage() {
               </div>
               {dayEvents.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 2 }}>
-                  {dayEvents.slice(0, 2).map((ev) => {
-                    const c = TYPE_COLORS[ev.type] || TYPE_COLORS.memo;
-                    return (
-                      <div
-                        key={ev.id}
-                        style={{
-                          background: c.bg,
-                          borderRadius: 2,
-                          padding: "0 2px",
-                          fontSize: 7,
-                          color: c.text,
-                          fontWeight: 600,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          lineHeight: "12px",
-                          opacity: ev.status === "done" || ev.status === "cancelled" ? 0.4 : 1,
-                        }}
-                      >
-                        {ev.label.slice(0, 6)}
-                      </div>
-                    );
-                  })}
+                  {uniqueDayLabels(dayEvents).slice(0, 2).map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: item.bg,
+                        borderRadius: 2,
+                        padding: "0 2px",
+                        fontSize: 7,
+                        color: item.color,
+                        fontWeight: 600,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        lineHeight: "12px",
+                        opacity: item.dimmed ? 0.4 : 1,
+                      }}
+                    >
+                      {item.text}
+                    </div>
+                  ))}
                   {dayEvents.length > 2 && (
                     <div style={{ fontSize: 7, color: "#94a3b8", textAlign: "center", lineHeight: 1 }}>
                       +{dayEvents.length - 2}
