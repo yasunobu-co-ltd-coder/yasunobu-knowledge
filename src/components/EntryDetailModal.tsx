@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { KnowledgeTimelineEntry } from "@/types/database";
 
 type Props = {
@@ -7,7 +8,29 @@ type Props = {
   onClose: () => void;
 };
 
+// UUID→ユーザー名の変換キャッシュ
+let _usersCache: { map: Map<string, string>; ts: number } | null = null;
+
 export default function EntryDetailModal({ entry, onClose }: Props) {
+  const [userMap, setUserMap] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (_usersCache && Date.now() - _usersCache.ts < 60_000) {
+      setUserMap(_usersCache.map);
+      return;
+    }
+    fetch("/api/users").then(r => r.json()).then((users: { id: string; name: string }[]) => {
+      const m = new Map<string, string>();
+      users.forEach(u => m.set(u.id, u.name));
+      _usersCache = { map: m, ts: Date.now() };
+      setUserMap(m);
+    }).catch(() => {});
+  }, []);
+
+  const resolveUser = (id: string | null | undefined) => {
+    if (!id) return null;
+    return userMap.get(id) || id;
+  };
   const isMemo = entry.source_type === "memo";
   const kw = Array.isArray(entry.keywords) ? entry.keywords : [];
   const decisions = Array.isArray(entry.decisions_json)
@@ -149,7 +172,7 @@ export default function EntryDetailModal({ entry, onClose }: Props) {
         {isMemo && (entry.due_date || entry.assignee) && (
           <div style={{ display: "flex", gap: 12, fontSize: 13, color: "#475569" }}>
             {entry.due_date && <span>期限: {entry.due_date}</span>}
-            {entry.assignee && <span>担当: {entry.assignee}</span>}
+            {entry.assignee && <span>担当: {resolveUser(entry.assignee)}</span>}
             {entry.assignment_type && (
               <span
                 style={{

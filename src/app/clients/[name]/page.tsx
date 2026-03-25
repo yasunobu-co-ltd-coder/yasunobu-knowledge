@@ -11,6 +11,8 @@ import { SkeletonList } from "@/components/Skeleton";
 
 type Tab = "karte" | "chat" | "logs";
 
+type AppUser = { id: string; name: string };
+
 export default function ClientDetailPage() {
   const params = useParams();
   const clientName = decodeURIComponent(params.name as string);
@@ -24,6 +26,13 @@ export default function ClientDetailPage() {
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 10000 }
   );
+
+  // ユーザー名解決
+  const { data: allUsers } = useSWR<AppUser[]>("/api/users", fetcher, { dedupingInterval: 60000 });
+  const resolveUser = (id: string | null | undefined) => {
+    if (!id || !allUsers) return id || "";
+    return allUsers.find(u => u.id === id)?.name || id;
+  };
 
   // TODO操作のロック
   const busyIds = useRef<Set<string>>(new Set());
@@ -206,7 +215,7 @@ export default function ClientDetailPage() {
                     >
                       <div style={{ display: "flex", gap: 4, fontSize: 11, color: "#94a3b8" }}>
                         {todo.due_date && <span>期限: {todo.due_date}</span>}
-                        {todo.assignee && <span>/ {todo.assignee}</span>}
+                        {todo.assignee && <span>/ {resolveUser(todo.assignee)}</span>}
                       </div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button
